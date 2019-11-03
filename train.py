@@ -1,318 +1,203 @@
 import argparse
-import itertools
+import datetime
+import gc
+import math
+import os
 
-from tensorboardX import SummaryWriter
 import torch
 from torch import nn, optim
+from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-import yaml
-from bisect import bisect
 
-from visdialch.data.dataset import VisDialDataset
-from visdialch.encoders import Encoder
-from visdialch.decoders import Decoder
-from visdialch.metrics import SparseGTMetrics, NDCG
-from visdialch.model import EncoderDecoderModel
-from visdialch.utils.checkpointing import CheckpointManager, load_checkpoint
+from dataloader import VisDialDataset
+from encoders import Encoder, LateFusionEncoder
+from decoders import Decoder
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--config-yml",
-    default="configs/lf_disc_faster_rcnn_x101.yml",
-    help="Path to a config file listing reader, model and solver parameters.",
-)
-parser.add_argument(
-    "--train-json",
-    default="data/visdial_1.0_train.json",
-    help="Path to json file containing VisDial v1.0 training data.",
-)
-parser.add_argument(
-    "--val-json",
-    default="data/visdial_1.0_val.json",
-    help="Path to json file containing VisDial v1.0 validation data.",
-)
-parser.add_argument(
-    "--val-dense-json",
-    default="data/visdial_1.0_val_dense_annotations.json",
-    help="Path to json file containing VisDial v1.0 validation dense ground "
-    "truth annotations.",
-)
+VisDialDataset.add_cmdline_args(parser)
+LateFusionEncoder.add_cmdline_args(parser)
 
+parser.add_argument_group('Encoder Decoder choice arguments')
+parser.add_argument('-encoder', default='lf-ques-im-hist', choices=['lf-ques-im-hist'],
+                        help='Encoder to use for training')
+parser.add_argument('-decoder', default='disc', choices=['disc'],
+                        help='Decoder to use for training')
 
-parser.add_argument_group(
-    "Arguments independent of experiment reproducibility"
-)
-parser.add_argument(
-    "--gpu-ids",
-    nargs="+",
-    type=int,
-    default=0,
-    help="List of ids of GPUs to use.",
-)
-parser.add_argument(
-    "--cpu-workers",
-    type=int,
-    default=4,
-    help="Number of CPU workers for dataloader.",
-)
-parser.add_argument(
-    "--overfit",
-    action="store_true",
-    help="Overfit model on 5 examples, meant for debugging.",
-)
-parser.add_argument(
-    "--validate",
-    action="store_true",
-    help="Whether to validate on val split after every epoch.",
-)
-parser.add_argument(
-    "--in-memory",
-    action="store_true",
-    help="Load the whole dataset and pre-extracted image features in memory. "
-    "Use only in presence of large RAM, atleast few tens of GBs.",
-)
+parser.add_argument_group('Optimization related arguments')
+parser.add_argument('-num_epochs', default=20, type=int, help='Epochs')
+parser.add_argument('-batch_size', default=64, type=int, help='Batch size')
+parser.add_argument('-lr', default=1e-3, type=float, help='Learning rate')
+parser.add_argument('-lr_decay_rate', default=0.9997592083, type=float, help='Decay for lr')
+parser.add_argument('-min_lr', default=5e-5, type=float, help='Minimum learning rate')
+parser.add_argument('-weight_init', default='xavier', choices=['xavier', 'kaiming'],
+                        help='Weight initialization strategy')
+parser.add_argument('-overfit', action='store_true',
+                        help='Overfit on 5 examples, meant for debugging')
+parser.add_argument('-gpuid', default=0, type=int, help='GPU id to use')
 
+parser.add_argument_group('Checkpointing related arguments')
+parser.add_argument('-load_path', default='', help='Checkpoint to load path from')
+parser.add_argument('-save_path', default='checkpoints/', help='Path to save checkpoints')
+parser.add_argument('-save_step', default=2, type=int,
+                        help='Save checkpoint after every save_step epochs')
 
-parser.add_argument_group("Checkpointing related arguments")
-parser.add_argument(
-    "--save-dirpath",
-    default="checkpoints/",
-    help="Path of directory to create checkpoint directory and save "
-    "checkpoints.",
-)
-parser.add_argument(
-    "--load-pthpath",
-    default="",
-    help="To continue training, path to .pth file of saved checkpoint.",
-)
-
-# For reproducibility.
-# Refer https://pytorch.org/docs/stable/notes/randomness.html
-torch.manual_seed(0)
-torch.cuda.manual_seed_all(0)
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
-
-
-# =============================================================================
-#   INPUT ARGUMENTS AND CONFIG
-# =============================================================================
+# ----------------------------------------------------------------------------
+# input arguments and options
+# ----------------------------------------------------------------------------
 
 args = parser.parse_args()
+start_time = datetime.datetime.strftime(datetime.datetime.utcnow(), '%d-%b-%Y-%H:%M:%S')
+if args.save_path == 'checkpoints/':
+    args.save_path += start_time
 
-# keys: {"dataset", "model", "solver"}
-config = yaml.load(open(args.config_yml))
+# seed for reproducibility
+torch.manual_seed(1234)
 
-if isinstance(args.gpu_ids, int):
-    args.gpu_ids = [args.gpu_ids]
-device = (
-    torch.device("cuda", args.gpu_ids[0])
-    if args.gpu_ids[0] >= 0
-    else torch.device("cpu")
-)
+# set device and default tensor type
+if args.gpuid >= 0:
+    torch.cuda.manual_seed_all(1234)
+    torch.cuda.set_device(args.gpuid)
 
-# Print config and args.
-print(yaml.dump(config, default_flow_style=False))
+# transfer all options to model
+model_args = args
+
+# ----------------------------------------------------------------------------
+# read saved model and args
+# ----------------------------------------------------------------------------
+
+if args.load_path != '':
+    components = torch.load(args.load_path)
+    model_args = components['model_args']
+    model_args.gpuid = args.gpuid
+    model_args.batch_size = args.batch_size
+
+    # this is required by dataloader
+    args.img_norm = model_args.img_norm
+
+# set this because only late fusion encoder is supported yet
+args.concat_history = True
+
 for arg in vars(args):
-    print("{:<20}: {}".format(arg, getattr(args, arg)))
+    print('{:<20}: {}'.format(arg, getattr(args, arg)))
 
+# ----------------------------------------------------------------------------
+# loading dataset wrapping with a dataloader
+# ----------------------------------------------------------------------------
 
-# =============================================================================
-#   SETUP DATASET, DATALOADER, MODEL, CRITERION, OPTIMIZER, SCHEDULER
-# =============================================================================
+dataset = VisDialDataset(args, ['train'])
+dataloader = DataLoader(dataset,
+                        batch_size=args.batch_size,
+                        shuffle=True,
+                        collate_fn=dataset.collate_fn)
 
-train_dataset = VisDialDataset(
-    config["dataset"],
-    args.train_json,
-    overfit=args.overfit,
-    in_memory=args.in_memory,
-    num_workers=args.cpu_workers,
-    return_options=True if config["model"]["decoder"] == "disc" else False,
-    add_boundary_toks=False if config["model"]["decoder"] == "disc" else True,
-)
-train_dataloader = DataLoader(
-    train_dataset,
-    batch_size=config["solver"]["batch_size"],
-    num_workers=args.cpu_workers,
-    shuffle=True,
-)
+# ----------------------------------------------------------------------------
+# setting model args
+# ----------------------------------------------------------------------------
 
-val_dataset = VisDialDataset(
-    config["dataset"],
-    args.val_json,
-    args.val_dense_json,
-    overfit=args.overfit,
-    in_memory=args.in_memory,
-    num_workers=args.cpu_workers,
-    return_options=True,
-    add_boundary_toks=False if config["model"]["decoder"] == "disc" else True,
-)
-val_dataloader = DataLoader(
-    val_dataset,
-    batch_size=config["solver"]["batch_size"]
-    if config["model"]["decoder"] == "disc"
-    else 5,
-    num_workers=args.cpu_workers,
-)
+# transfer some useful args from dataloader to model
+for key in {'num_data_points', 'vocab_size', 'max_ques_count',
+            'max_ques_len', 'max_ans_len'}:
+    setattr(model_args, key, getattr(dataset, key))
 
-# Pass vocabulary to construct Embedding layer.
-encoder = Encoder(config["model"], train_dataset.vocabulary)
-decoder = Decoder(config["model"], train_dataset.vocabulary)
-print("Encoder: {}".format(config["model"]["encoder"]))
-print("Decoder: {}".format(config["model"]["decoder"]))
+# iterations per epoch
+setattr(args, 'iter_per_epoch', 
+    math.ceil(dataset.num_data_points['train'] / args.batch_size))
+print("{} iter per epoch.".format(args.iter_per_epoch))
 
-# Share word embedding between encoder and decoder.
-decoder.word_embed = encoder.word_embed
+# ----------------------------------------------------------------------------
+# setup the model
+# ----------------------------------------------------------------------------
 
-# Wrap encoder and decoder in a model.
-model = EncoderDecoderModel(encoder, decoder).to(device)
-if -1 not in args.gpu_ids:
-    model = nn.DataParallel(model, args.gpu_ids)
+encoder = Encoder(model_args)
+decoder = Decoder(model_args, encoder)
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(list(encoder.parameters()) + list(decoder.parameters()),
+                       lr=args.lr)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=args.lr_decay_rate)
 
-# Loss function.
-if config["model"]["decoder"] == "disc":
-    criterion = nn.CrossEntropyLoss()
-elif config["model"]["decoder"] == "gen":
-    criterion = nn.CrossEntropyLoss(
-        ignore_index=train_dataset.vocabulary.PAD_INDEX
-    )
-else:
-    raise NotImplementedError
+if args.load_path != '':
+    encoder.load_state_dict(components['encoder'])
+    decoder.load_state_dict(components['decoder'])
+    print("Loaded model from {}".format(args.load_path))
+print("Encoder: {}".format(args.encoder))
+print("Decoder: {}".format(args.decoder))
 
-if config["solver"]["training_splits"] == "trainval":
-    iterations = (len(train_dataset) + len(val_dataset)) // config["solver"][
-        "batch_size"
-    ] + 1
-else:
-    iterations = len(train_dataset) // config["solver"]["batch_size"] + 1
+if args.gpuid >= 0:
+    encoder = encoder.cuda()
+    decoder = decoder.cuda()
+    criterion = criterion.cuda()
 
+# ----------------------------------------------------------------------------
+# training
+# ----------------------------------------------------------------------------
 
-def lr_lambda_fun(current_iteration: int) -> float:
-    """Returns a learning rate multiplier.
+encoder.train()
+decoder.train()
+os.makedirs(args.save_path, exist_ok=True)
 
-    Till `warmup_epochs`, learning rate linearly increases to `initial_lr`,
-    and then gets multiplied by `lr_gamma` every time a milestone is crossed.
-    """
-    current_epoch = float(current_iteration) / iterations
-    if current_epoch <= config["solver"]["warmup_epochs"]:
-        alpha = current_epoch / float(config["solver"]["warmup_epochs"])
-        return config["solver"]["warmup_factor"] * (1.0 - alpha) + alpha
-    else:
-        idx = bisect(config["solver"]["lr_milestones"], current_epoch)
-        return pow(config["solver"]["lr_gamma"], idx)
+running_loss = 0.0
+train_begin = datetime.datetime.utcnow()
+print("Training start time: {}".format(
+    datetime.datetime.strftime(train_begin, '%d-%b-%Y-%H:%M:%S')))
 
-
-optimizer = optim.Adamax(model.parameters(), lr=config["solver"]["initial_lr"])
-scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda_fun)
-
-
-# =============================================================================
-#   SETUP BEFORE TRAINING LOOP
-# =============================================================================
-
-summary_writer = SummaryWriter(log_dir=args.save_dirpath)
-checkpoint_manager = CheckpointManager(
-    model, optimizer, args.save_dirpath, config=config
-)
-sparse_metrics = SparseGTMetrics()
-ndcg = NDCG()
-
-# If loading from checkpoint, adjust start epoch and load parameters.
-if args.load_pthpath == "":
-    start_epoch = 0
-else:
-    # "path/to/checkpoint_xx.pth" -> xx
-    start_epoch = int(args.load_pthpath.split("_")[-1][:-4])
-
-    model_state_dict, optimizer_state_dict = load_checkpoint(args.load_pthpath)
-    if isinstance(model, nn.DataParallel):
-        model.module.load_state_dict(model_state_dict)
-    else:
-        model.load_state_dict(model_state_dict)
-    optimizer.load_state_dict(optimizer_state_dict)
-    print("Loaded model from {}".format(args.load_pthpath))
-
-# =============================================================================
-#   TRAINING LOOP
-# =============================================================================
-
-# Forever increasing counter to keep track of iterations (for tensorboard log).
-global_iteration_step = start_epoch * iterations
-
-for epoch in range(start_epoch, config["solver"]["num_epochs"]):
-
-    # -------------------------------------------------------------------------
-    #   ON EPOCH START  (combine dataloaders if training on train + val)
-    # -------------------------------------------------------------------------
-    if config["solver"]["training_splits"] == "trainval":
-        combined_dataloader = itertools.chain(train_dataloader, val_dataloader)
-    else:
-        combined_dataloader = itertools.chain(train_dataloader)
-
-    print(f"\nTraining for epoch {epoch}:")
-    for i, batch in enumerate(tqdm(combined_dataloader)):
-        for key in batch:
-            batch[key] = batch[key].to(device)
-
+for epoch in range(1, model_args.num_epochs + 1):
+    for i, batch in enumerate(dataloader):
         optimizer.zero_grad()
-        output = model(batch)
-        target = (
-            batch["ans_ind"]
-            if config["model"]["decoder"] == "disc"
-            else batch["ans_out"]
-        )
-        batch_loss = criterion(
-            output.view(-1, output.size(-1)), target.view(-1)
-        )
-        batch_loss.backward()
+
+        for key in batch:
+            if not isinstance(batch[key], list):
+                batch[key] = Variable(batch[key])
+                if args.gpuid >= 0:
+                    batch[key] = batch[key].cuda()
+
+        # --------------------------------------------------------------------
+        # forward-backward pass and optimizer step
+        # --------------------------------------------------------------------
+        enc_out = encoder(batch)
+        dec_out = decoder(enc_out, batch)
+        cur_loss = criterion(dec_out, batch['ans_ind'].view(-1))
+        cur_loss.backward()
+
         optimizer.step()
+        gc.collect()
 
-        summary_writer.add_scalar(
-            "train/loss", batch_loss, global_iteration_step
-        )
-        summary_writer.add_scalar(
-            "train/lr", optimizer.param_groups[0]["lr"], global_iteration_step
-        )
+        # --------------------------------------------------------------------
+        # update running loss and decay learning rates
+        # --------------------------------------------------------------------
+        if running_loss > 0.0:
+            running_loss = 0.95 * running_loss + 0.05 * cur_loss.item()
+        else:
+            running_loss = cur_loss.item()
 
-        scheduler.step(global_iteration_step)
-        global_iteration_step += 1
-        torch.cuda.empty_cache()
+        if optimizer.param_groups[0]['lr'] > args.min_lr:
+            scheduler.step()
 
-    # -------------------------------------------------------------------------
-    #   ON EPOCH END  (checkpointing and validation)
-    # -------------------------------------------------------------------------
-    checkpoint_manager.step()
+        # --------------------------------------------------------------------
+        # print after every few iterations
+        # --------------------------------------------------------------------
+        if i % 25 == 0:
+            # print current time, running average, learning rate, iteration, epoch
+            print("[{}][Epoch: {:3d}][Iter: {:6d}][Loss: {:6f}][lr: {:7f}]".format(
+                datetime.datetime.utcnow() - train_begin, epoch,
+                    (epoch - 1) * args.iter_per_epoch + i, running_loss,
+                    optimizer.param_groups[0]['lr']))
 
-    # Validate and report automatic metrics.
-    if args.validate:
+    # ------------------------------------------------------------------------
+    # save checkpoints and final model
+    # ------------------------------------------------------------------------
+    if epoch % args.save_step == 0:
+        torch.save({
+            'encoder': encoder.state_dict(),
+            'decoder': decoder.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'model_args': encoder.args
+        }, os.path.join(args.save_path, 'model_epoch_{}.pth'.format(epoch)))
 
-        # Switch dropout, batchnorm etc to the correct mode.
-        model.eval()
-
-        print(f"\nValidation after epoch {epoch}:")
-        for i, batch in enumerate(tqdm(val_dataloader)):
-            for key in batch:
-                batch[key] = batch[key].to(device)
-            with torch.no_grad():
-                output = model(batch)
-            sparse_metrics.observe(output, batch["ans_ind"])
-            if "gt_relevance" in batch:
-                output = output[
-                    torch.arange(output.size(0)), batch["round_id"] - 1, :
-                ]
-                ndcg.observe(output, batch["gt_relevance"])
-
-        all_metrics = {}
-        all_metrics.update(sparse_metrics.retrieve(reset=True))
-        all_metrics.update(ndcg.retrieve(reset=True))
-        for metric_name, metric_value in all_metrics.items():
-            print(f"{metric_name}: {metric_value}")
-        summary_writer.add_scalars(
-            "metrics", all_metrics, global_iteration_step
-        )
-
-        model.train()
-        torch.cuda.empty_cache()
+torch.save({
+    'encoder': encoder.state_dict(),
+    'decoder': decoder.state_dict(),
+    'optimizer': optimizer.state_dict(),
+    'model_args': encoder.args
+}, os.path.join(args.save_path, 'model_final.pth'))
