@@ -10,6 +10,9 @@ from tqdm import tqdm
 import yaml
 from bisect import bisect
 
+import datetime
+import numpy as np
+
 from visdialch.data.dataset import VisDialDataset
 from visdialch.encoders import Encoder
 from visdialch.decoders import Decoder
@@ -21,7 +24,7 @@ from visdialch.utils.checkpointing import CheckpointManager, load_checkpoint
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--config-yml",
-    default="configs/lf_disc_faster_rcnn_x101.yml",
+    default="configs/rva.yml",
     help="Path to a config file listing reader, model and solver parameters.",
 )
 parser.add_argument(
@@ -129,7 +132,6 @@ train_dataset = VisDialDataset(
     args.train_json,
     overfit=args.overfit,
     in_memory=args.in_memory,
-    num_workers=args.cpu_workers,
     return_options=True if config["model"]["decoder"] == "disc" else False,
     add_boundary_toks=False if config["model"]["decoder"] == "disc" else True,
 )
@@ -146,7 +148,6 @@ val_dataset = VisDialDataset(
     args.val_dense_json,
     overfit=args.overfit,
     in_memory=args.in_memory,
-    num_workers=args.cpu_workers,
     return_options=True,
     add_boundary_toks=False if config["model"]["decoder"] == "disc" else True,
 )
@@ -158,16 +159,17 @@ val_dataloader = DataLoader(
     num_workers=args.cpu_workers,
 )
 
-
-print('train_dataset size: %d' % len(train_dataset))
-print('val_dataset size: %d' % len(val_dataset))
-
 # Pass vocabulary to construct Embedding layer.
 encoder = Encoder(config["model"], train_dataset.vocabulary)
 decoder = Decoder(config["model"], train_dataset.vocabulary)
 print("Encoder: {}".format(config["model"]["encoder"]))
 print("Decoder: {}".format(config["model"]["decoder"]))
 
+# New: Initializing word_embed using GloVe
+if config["dataset"]["glove_npy"] != '':
+    encoder.word_embed.weight.data = torch.from_numpy(np.load(config["dataset"]["glove_npy"]))
+    print("Loaded glove vectors from {}".format(config["dataset"]["glove_npy"]))
+    
 # Share word embedding between encoder and decoder.
 decoder.word_embed = encoder.word_embed
 
@@ -196,6 +198,7 @@ else:
 
 def lr_lambda_fun(current_iteration: int) -> float:
     """Returns a learning rate multiplier.
+
     Till `warmup_epochs`, learning rate linearly increases to `initial_lr`,
     and then gets multiplied by `lr_gamma` every time a milestone is crossed.
     """
@@ -215,7 +218,9 @@ scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda_fun)
 # =============================================================================
 #   SETUP BEFORE TRAINING LOOP
 # =============================================================================
-
+start_time = datetime.datetime.strftime(datetime.datetime.utcnow(), '%d-%b-%Y-%H:%M:%S')
+if args.save_dirpath == 'checkpoints/':
+    args.save_dirpath += '%s+%s/%s' % (config["model"]["encoder"], config["model"]["decoder"], start_time)
 summary_writer = SummaryWriter(log_dir=args.save_dirpath)
 checkpoint_manager = CheckpointManager(
     model, optimizer, args.save_dirpath, config=config
@@ -225,7 +230,7 @@ ndcg = NDCG()
 
 # If loading from checkpoint, adjust start epoch and load parameters.
 if args.load_pthpath == "":
-    start_epoch = 0
+    start_epoch = 1
 else:
     # "path/to/checkpoint_xx.pth" -> xx
     start_epoch = int(args.load_pthpath.split("_")[-1][:-4])
@@ -243,8 +248,10 @@ else:
 # =============================================================================
 
 # Forever increasing counter to keep track of iterations (for tensorboard log).
-global_iteration_step = start_epoch * iterations
+global_iteration_step = (start_epoch - 1) * iterations
 
+running_loss = 0.0 # New
+train_begin = datetime.datetime.utcnow() # New
 for epoch in range(start_epoch, config["solver"]["num_epochs"]):
 
     # -------------------------------------------------------------------------
@@ -256,7 +263,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         combined_dataloader = itertools.chain(train_dataloader)
 
     print(f"\nTraining for epoch {epoch}:")
-    for i, batch in enumerate(tqdm(combined_dataloader)):
+    for i, batch in enumerate(combined_dataloader):
         for key in batch:
             batch[key] = batch[key].to(device)
 
@@ -273,16 +280,32 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         batch_loss.backward()
         optimizer.step()
 
-        summary_writer.add_scalar(
-            "train/loss", batch_loss, global_iteration_step
-        )
-        summary_writer.add_scalar(
-            "train/lr", optimizer.param_groups[0]["lr"], global_iteration_step
-        )
+        # --------------------------------------------------------------------
+        # update running loss and decay learning rates
+        # --------------------------------------------------------------------
+        if running_loss > 0.0:
+            running_loss = 0.95 * running_loss + 0.05 * batch_loss.item()
+        else:
+            running_loss = batch_loss.item()
 
         scheduler.step(global_iteration_step)
         global_iteration_step += 1
         torch.cuda.empty_cache()
+
+        if global_iteration_step % 100 == 0:
+            # print current time, running average, learning rate, iteration, epoch
+            print("[{}][Epoch: {:3d}][Iter: {:6d}][Loss: {:6f}][lr: {:7f}]".format(
+                datetime.datetime.utcnow() - train_begin, epoch,
+                    global_iteration_step, running_loss,
+                    optimizer.param_groups[0]['lr']))
+
+            # tensorboardX
+            summary_writer.add_scalar(
+                "train/loss", batch_loss, global_iteration_step
+            )
+            summary_writer.add_scalar(
+                "train/lr", optimizer.param_groups[0]["lr"], global_iteration_step
+            )
 
     # -------------------------------------------------------------------------
     #   ON EPOCH END  (checkpointing and validation)
