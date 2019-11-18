@@ -1,0 +1,13 @@
+.*
+*.pyc
+*.egg-info
+./data/
+./checkpoints/*
+/experiments/*/checkpoints
+/experiments/*/data
+/experiments/*/logs
+/experiments/*/plots
+/experiments/*/results*
+docker
+sync
+
