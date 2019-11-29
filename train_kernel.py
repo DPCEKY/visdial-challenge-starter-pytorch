@@ -343,7 +343,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
                 preds_vert = torch.argmax(logits, dim=0)
                 gt = torch.arange(batch_size)
                 num_correct = torch.sum(preds_hori == gt) + torch.sum(preds_vert == gt)
-                acc = num_correct / (batch_size * 2)
+                acc = num_correct.double() / (batch_size * 2)
                 accs.append(acc.item())
 
         print('eval acc is %.5f' % np.mean(accs))
