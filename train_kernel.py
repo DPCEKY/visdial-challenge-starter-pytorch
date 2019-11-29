@@ -6,6 +6,7 @@ import torch
 from torch import nn, optim
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 from tqdm import tqdm
 import yaml
 from bisect import bisect
@@ -284,8 +285,8 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         print(diffs.shape)
 
         optimizer.zero_grad()
-        # batch_loss
-
+        batch_loss = torch.mean(F.relu(diffs + 1))
+        print(batch_loss)
 
         raise Exception()
 
