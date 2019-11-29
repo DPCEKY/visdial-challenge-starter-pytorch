@@ -270,8 +270,14 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         print(batch['img_feat'].shape)
 
         batch_size = caption.shape[0]
+        kv_size = 100
         print(batch_size)
-        # img_embed_final = torch.zeros([config])
+        img_embed_final = torch.rand([batch_size, kv_size])
+        cap_embed_final = torch.rand([batch_size, kv_size])
+        logits = torch.bmm(img_embed_final.unsqueeze(1), cap_embed_final.unsqueeze(2))
+        print(logits.shape)
+
+
 
         raise Exception()
 
