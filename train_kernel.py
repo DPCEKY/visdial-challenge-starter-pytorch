@@ -274,7 +274,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         print(batch_size)
         img_embed_final = torch.rand([batch_size, kv_size])
         cap_embed_final = torch.rand([batch_size, kv_size])
-        logits = torch.bmm(img_embed_final.unsqueeze(1), cap_embed_final.unsqueeze(2))
+        logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))
         print(logits.shape)
 
 
