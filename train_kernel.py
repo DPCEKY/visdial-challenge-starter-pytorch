@@ -280,7 +280,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         gt = logits.diagonal()
         diffs_hori = logits - gt.unsqueeze(1).repeat([1, batch_size])
         diffs_vert = logits - gt.unsqueeze(0).repeat([batch_size, 1])
-        diffs = torch.stack([diffs_hori, diffs_vert], dim=1)
+        diffs = torch.cat([diffs_hori, diffs_vert], dim=1)
         print(diffs.shape)
 
         optimizer.zero_grad()
