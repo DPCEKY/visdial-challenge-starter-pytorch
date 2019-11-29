@@ -261,10 +261,12 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         for key in batch:
             batch[key] = batch[key].to(device)
 
-
         print(batch.keys())
-        print(batch['hist'].shape)
-        print(batch['hist_len'].shape)
+        caption = batch['hist'][:, 0]
+        caption_len = batch['hist_len'][:, 0]
+
+        print(caption.shape)
+        print(caption_len.shape)
         raise Exception()
 
         optimizer.zero_grad()
