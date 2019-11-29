@@ -269,28 +269,36 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         print(caption_len.shape)
         print(batch['img_feat'].shape)
 
+        # place holder
         batch_size = caption.shape[0]
         kv_size = 100
-        print(batch_size)
         img_embed_final = torch.rand([batch_size, kv_size])
         cap_embed_final = torch.rand([batch_size, kv_size])
-        logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))
-        print(logits.shape)
 
+        # calculate scores and losses
+        logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))
+        gt = logits.diagonal()
+        diffs_hori = logits - gt.unsqueeze(1).repeat([1, batch_size])
+        diffs_vert = logits - gt.unsqueeze(0).repeat([batch_size, 1])
+        diffs = torch.stack([diffs_hori, diffs_vert], dim=1)
+        print(diffs.shape)
+
+        optimizer.zero_grad()
+        # batch_loss
 
 
         raise Exception()
 
-        optimizer.zero_grad()
-        output = model(batch)
-        target = (
-            batch["ans_ind"]
-            if config["model"]["decoder"] == "disc"
-            else batch["ans_out"]
-        )
-        batch_loss = criterion(
-            output.view(-1, output.size(-1)), target.view(-1)
-        )
+
+        # output = model(batch)
+        # target = (
+        #     batch["ans_ind"]
+        #     if config["model"]["decoder"] == "disc"
+        #     else batch["ans_out"]
+        # )
+        # batch_loss = criterion(
+        #     output.view(-1, output.size(-1)), target.view(-1)
+        # )
         batch_loss.backward()
         optimizer.step()
 
