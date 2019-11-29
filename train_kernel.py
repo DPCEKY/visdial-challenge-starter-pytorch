@@ -346,7 +346,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
                 acc = num_correct / (batch_size * 2)
                 accs.append(acc.item())
 
-        print('eval acc is %.5f', np.mean(accs))
+        print('eval acc is %.5f' % np.mean(accs))
 
 
         # all_metrics = {}
