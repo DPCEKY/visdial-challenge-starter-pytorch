@@ -269,10 +269,10 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         print(caption_len.shape)
         print(batch['img_feat'].shape)
 
-        batch_size = caption.shape[1]
+        batch_size = caption.shape[0]
         print(batch_size)
         # img_embed_final = torch.zeros([config])
-        
+
         raise Exception()
 
         optimizer.zero_grad()
