@@ -267,6 +267,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
 
         print(caption.shape)
         print(caption_len.shape)
+        print(batch['img_feat'].shape)
         raise Exception()
 
         optimizer.zero_grad()
