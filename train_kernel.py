@@ -262,13 +262,8 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         for key in batch:
             batch[key] = batch[key].to(device)
 
-        print(batch.keys())
         caption = batch['hist'][:, 0]
         caption_len = batch['hist_len'][:, 0]
-
-        print(caption.shape)
-        print(caption_len.shape)
-        print(batch['img_feat'].shape)
 
         # place holder
         batch_size = caption.shape[0]
@@ -277,31 +272,17 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         cap_embed_final = torch.rand([batch_size, kv_size])
 
         # calculate scores and losses
-        logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))
+        logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))  # (batch_size, batch_size)
         gt = logits.diagonal()
         diffs_hori = logits - gt.unsqueeze(1).repeat([1, batch_size])
         diffs_vert = logits - gt.unsqueeze(0).repeat([batch_size, 1])
-        diffs = torch.cat([diffs_hori, diffs_vert], dim=1)
-        print(diffs.shape)
+        diffs = torch.cat([diffs_hori, diffs_vert], dim=1)  # (batch_size, batch_size * 2)
 
         optimizer.zero_grad()
         batch_loss = torch.mean(F.relu(diffs + 1))
-        print(batch_loss)
 
-        raise Exception()
-
-
-        # output = model(batch)
-        # target = (
-        #     batch["ans_ind"]
-        #     if config["model"]["decoder"] == "disc"
-        #     else batch["ans_out"]
-        # )
-        # batch_loss = criterion(
-        #     output.view(-1, output.size(-1)), target.view(-1)
-        # )
-        batch_loss.backward()
-        optimizer.step()
+        # batch_loss.backward()
+        # optimizer.step()
 
         # --------------------------------------------------------------------
         # update running loss and decay learning rates
@@ -342,26 +323,42 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
         model.eval()
 
         print(f"\nValidation after epoch {epoch}:")
+        accs = []
         for i, batch in enumerate(tqdm(val_dataloader)):
             for key in batch:
                 batch[key] = batch[key].to(device)
             with torch.no_grad():
-                output = model(batch)
-            sparse_metrics.observe(output, batch["ans_ind"])
-            if "gt_relevance" in batch:
-                output = output[
-                         torch.arange(output.size(0)), batch["round_id"] - 1, :
-                         ]
-                ndcg.observe(output, batch["gt_relevance"])
+                # output = model(batch)
 
-        all_metrics = {}
-        all_metrics.update(sparse_metrics.retrieve(reset=True))
-        all_metrics.update(ndcg.retrieve(reset=True))
-        for metric_name, metric_value in all_metrics.items():
-            print(f"{metric_name}: {metric_value}")
-        summary_writer.add_scalars(
-            "metrics", all_metrics, global_iteration_step
-        )
+                # place holder
+                batch_size = caption.shape[0]
+                kv_size = 100
+                img_embed_final = torch.rand([batch_size, kv_size])
+                cap_embed_final = torch.rand([batch_size, kv_size])
+
+                # calculate scores and losses
+                logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))  # (batch_size, batch_size)
+
+                preds_hori = torch.argmax(logits, dim=1)
+                preds_vert = torch.argmax(logits, dim=0)
+                gt = torch.arange(batch_size)
+                num_correct = torch.sum(preds_hori == gt) + torch.sum(preds_vert == gt)
+                acc = num_correct / (batch_size * 2)
+                accs.append(acc.item())
+
+        print('eval acc is %.5f', np.mean(accs))
+
+
+        # all_metrics = {}
+        # all_metrics.update(sparse_metrics.retrieve(reset=True))
+        # all_metrics.update(ndcg.retrieve(reset=True))
+        # for metric_name, metric_value in all_metrics.items():
+        #     print(f"{metric_name}: {metric_value}")
+        #
+        #
+        # summary_writer.add_scalars(
+        #     "metrics", all_metrics, global_iteration_step
+        # )
 
         model.train()
         torch.cuda.empty_cache()
