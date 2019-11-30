@@ -6,6 +6,140 @@ from visdialch.utils import DynamicRNN
 from visdialch.utils import Q_ATT, H_ATT, V_Filter
 from .modules import RvA_MODULE
 
+import numpy as np
+from torch.autograd import Variable
+
+class CompactBilinearPooling(nn.Module):
+    """
+    Compute compact bilinear pooling over two bottom inputs.
+    Args:
+        output_dim: output dimension for compact bilinear pooling.
+        sum_pool: (Optional) If True, sum the output along round_len
+                  dimensions and return output shape [batch_size, output_dim].
+                  Otherwise return [batch_size, round_len, output_dim].
+                  Default: True.
+        rand_h_1: (Optional) an 1D numpy array containing indices in interval
+                  `[0, output_dim)`. Automatically generated from `seed_h_1`
+                  if is None.
+        rand_s_1: (Optional) an 1D numpy array of 1 and -1, having the same shape
+                  as `rand_h_1`. Automatically generated from `seed_s_1` if is
+                  None.
+        rand_h_2: (Optional) an 1D numpy array containing indices in interval
+                  `[0, output_dim)`. Automatically generated from `seed_h_2`
+                  if is None.
+        rand_s_2: (Optional) an 1D numpy array of 1 and -1, having the same shape
+                  as `rand_h_2`. Automatically generated from `seed_s_2` if is
+                  None.
+    """
+
+    def __init__(self, input_dim1, input_dim2, output_dim,
+                 sum_pool=False, cuda=True,
+                 rand_h_1=None, rand_s_1=None, rand_h_2=None, rand_s_2=None):
+        super(CompactBilinearPooling, self).__init__()
+        self.input_dim1 = input_dim1
+        self.input_dim2 = input_dim2
+        self.output_dim = output_dim
+        self.sum_pool = sum_pool
+
+        if rand_h_1 is None:
+            np.random.seed(1)
+            rand_h_1 = np.random.randint(output_dim, size=self.input_dim1)
+        if rand_s_1 is None:
+            np.random.seed(3)
+            rand_s_1 = 2 * np.random.randint(2, size=self.input_dim1) - 1
+
+        self.sparse_sketch_matrix1 = Variable(self.generate_sketch_matrix(
+            rand_h_1, rand_s_1, self.output_dim))
+
+        if rand_h_2 is None:
+            np.random.seed(5)
+            rand_h_2 = np.random.randint(output_dim, size=self.input_dim2)
+        if rand_s_2 is None:
+            np.random.seed(7)
+            rand_s_2 = 2 * np.random.randint(2, size=self.input_dim2) - 1
+
+        self.sparse_sketch_matrix2 = Variable(self.generate_sketch_matrix(
+            rand_h_2, rand_s_2, self.output_dim))
+
+        if cuda:
+            self.sparse_sketch_matrix1 = self.sparse_sketch_matrix1.cuda()
+            self.sparse_sketch_matrix2 = self.sparse_sketch_matrix2.cuda()
+
+    def forward(self, bottom1, bottom2):
+        """
+        bottom1: 1st input, 4D Tensor of shape [batch_size, round_len, input_dim1].
+        bottom2: 2nd input, 4D Tensor of shape [batch_size, round_len, input_dim2].
+        """
+        assert bottom1.size(2) == self.input_dim1 and \
+            bottom2.size(2) == self.input_dim2
+
+        batch_size, round_len, _ = bottom1.size()
+
+        bottom1_flat = bottom1.contiguous().view(-1, self.input_dim1)
+        bottom2_flat = bottom2.contiguous().view(-1, self.input_dim2)
+
+        sketch_1 = bottom1_flat.mm(self.sparse_sketch_matrix1)
+        sketch_2 = bottom2_flat.mm(self.sparse_sketch_matrix2)
+
+        # fft1_real, fft1_imag = afft.Fft()(sketch_1, Variable(torch.zeros(sketch_1.size())).cuda())
+        sketch_1_fft = torch.rfft(sketch_1, 1)
+        # print('sketch_1_fft.shape = {}'.format(sketch_1_fft.shape))
+        fft1_real = sketch_1_fft[:, :, 0]
+        fft1_imag = sketch_1_fft[:, :, 1]
+        # print('fft1_real.shape = {}, fft1_imag.shape = {}'.format(fft1_real.shape, fft1_imag.shape))
+
+        # fft2_real, fft2_imag = afft.Fft()(sketch_2, Variable(torch.zeros(sketch_2.size())).cuda())
+        sketch_2_fft = torch.rfft(sketch_2, 1)
+        # print('sketch_2_fft.shape = {}'.format(sketch_2_fft.shape))
+        fft2_real = sketch_2_fft[:, :, 0]
+        fft2_imag = sketch_2_fft[:, :, 1]
+        # print('fft2_real.shape = {}, fft2_imag.shape = {}'.format(fft2_real.shape, fft2_imag.shape))
+
+        fft_product_real = fft1_real.mul(fft2_real) - fft1_imag.mul(fft2_imag)
+        fft_product_imag = fft1_real.mul(fft2_imag) + fft1_imag.mul(fft2_real)
+        # print('fft_product_real.shape = {}, fft_product_imag.shape = {}'.format(fft_product_real.shape, fft_product_imag.shape))
+
+        cbp_flat_fft = torch.cat((fft_product_real.unsqueeze(-1), fft_product_imag.unsqueeze(-1)), -1)
+        # print('cbp_flat_fft.shape = {}'.format(cbp_flat_fft.shape))
+
+        # cbp_flat = afft.Ifft()(fft_product_real, fft_product_imag)[0]
+        cbp_flat = torch.irfft(cbp_flat_fft, 1, signal_sizes=[self.output_dim])
+
+        cbp = cbp_flat.view(batch_size, round_len, self.output_dim)
+
+        if self.sum_pool:
+            cbp = cbp.sum(dim=1).sum(dim=1)
+
+        return cbp
+
+    @staticmethod
+    def generate_sketch_matrix(rand_h, rand_s, output_dim):
+        """
+        Return a sparse matrix used for tensor sketch operation in compact bilinear
+        pooling
+        Args:
+            rand_h: an 1D numpy array containing indices in interval `[0, output_dim)`.
+            rand_s: an 1D numpy array of 1 and -1, having the same shape as `rand_h`.
+            output_dim: the output dimensions of compact bilinear pooling.
+        Returns:
+            a sparse matrix of shape [input_dim, output_dim] for tensor sketch.
+        """
+
+        # Generate a sparse matrix for tensor count sketch
+        rand_h = rand_h.astype(np.int64)
+        rand_s = rand_s.astype(np.float32)
+        assert(rand_h.ndim == 1 and rand_s.ndim ==
+               1 and len(rand_h) == len(rand_s))
+        assert(np.all(rand_h >= 0) and np.all(rand_h < output_dim))
+
+        input_dim = len(rand_h)
+        indices = np.concatenate((np.arange(input_dim)[..., np.newaxis],
+                                  rand_h[..., np.newaxis]), axis=1)
+        indices = torch.from_numpy(indices)
+        rand_s = torch.from_numpy(rand_s)
+        sparse_sketch_matrix = torch.sparse.FloatTensor(
+            indices.t(), rand_s, torch.Size([input_dim, output_dim]))
+        return sparse_sketch_matrix.to_dense()
 
 class RvAEncoder(nn.Module):
     def __init__(self, config, vocabulary):
@@ -48,6 +182,9 @@ class RvAEncoder(nn.Module):
         # modules
         self.RvA_MODULE = RvA_MODULE(config)
         self.V_Filter = V_Filter(config)
+
+        # multimodel compact bilinear pooling for outer prod
+        self.mcb = CompactBilinearPooling(2048, 1324, 3372)
 
         # fusion layer
         self.fusion = nn.Sequential(
@@ -111,7 +248,23 @@ class RvAEncoder(nn.Module):
         img_ans_feat = self.V_Filter(img_feat, ques_ans_feat)
 
         # joint embedding
-        fused_vector = torch.cat((img_ans_feat, ques_ans_feat, hist_ans_feat), -1)
+        # fused_vector = torch.cat((img_ans_feat, ques_ans_feat, hist_ans_feat), -1)
+        # print('fused_vector.size() = {}'.format(fused_vector.size()))
+
+
+        # outer product
+        dialog_vector = torch.cat((ques_ans_feat, hist_ans_feat), -1)
+        fused_vector = self.mcb(img_ans_feat, dialog_vector)
+        # img_feature_size = img_ans_feat.size(2)
+        # img_ans_feat = img_ans_feat.reshape(batch_size, num_rounds, 1, img_feature_size)
+        # dialog_feature_size = dialog_vector.size(2)
+        # dialog_vector = dialog_vector.reshape(batch_size, num_rounds, dialog_feature_size, 1)
+        # print('img_ans_feat.size() = {}, dialog_vector.size() = {}'.format(img_ans_feat.size(), dialog_vector.size()))
+        # outer_prod = torch.matmul(dialog_vector, img_ans_feat).reshape(batch_size, num_rounds, -1)
+
+        # print('outer_prod.size() = {}'.format(outer_prod.size()))
+        # print('fused_vector.size() = {}'.format(fused_vector.size()))
+
         # img_ans_feat - shape: (batch_size, num_rounds, lstm_hidden_size)
         fused_embedding = torch.tanh(self.fusion(fused_vector))
 
