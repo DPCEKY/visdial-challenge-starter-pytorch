@@ -49,57 +49,51 @@ class IMG_KVQ(nn.Module):
     def __init__(self, config):
         super(IMG_KVQ, self).__init__()
 
-        print('?????')
+        self.img_rnn = nn.LSTM(
+            config["img_feature_size"],
+            config["lstm_hidden_size"],
+            config["lstm_num_layers"],
+            batch_first=True,
+            dropout=config["dropout"],
+            bidirectional=True
+        )
 
-        # print('img_feature_size', config["img_feature_size"])
-        raise Exception()
+        self.kv = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            GatedTrans(
+                config["img_feature_size"],
+                config["lstm_hidden_size"]
+            ),
+        )
 
-        # self.img_rnn = nn.LSTM(
-        #     config["img_feature_size"],
-        #     config["lstm_hidden_size"],
-        #     config["lstm_num_layers"],
-        #     batch_first=True,
-        #     dropout=config["dropout"],
-        #     bidirectional=True
-        # )
-        #
-        # self.kv = nn.Sequential(
-        #     nn.Dropout(p=config["dropout_fc"]),
-        #     GatedTrans(
-        #         config["img_feature_size"],
-        #         config["lstm_hidden_size"]
-        #     ),
-        # )
-        #
-        # self.q = nn.Sequential(
-        #     nn.Dropout(p=config["dropout_fc"]),
-        #     GatedTrans(
-        #         config["img_feature_size"],
-        #         config["lstm_hidden_size"]
-        #     ),
-        # )
-        #
-        # self.att = nn.Sequential(
-        #     nn.Dropout(p=config["dropout_fc"]),
-        #     nn.Linear(
-        #         config["lstm_hidden_size"] * 2,
-        #         1
-        #     )
-        # )
+        self.q = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            GatedTrans(
+                config["img_feature_size"],
+                config["lstm_hidden_size"]
+            ),
+        )
+
+        self.att = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            nn.Linear(
+                config["lstm_hidden_size"] * 2,
+                1
+            )
+        )
 
     def forward(self, img):
-        pass
-        # # img: (batch_size, num_proposal, img_feature_size)
-        # # img_feature_size = img.size(-1)
-        # img_encoded = self.img_rnn(img)  # (batch_size, num_proposal, lstm_hidden_size)
-        #
-        # kv = self.kv(img)
-        # q = self.q(img)
-        #
-        # att = self.att(img_encoded).squeeze(-1)
-        # att = F.softmax(att, dim=-1).unsqueeze(-1)
-        #
-        # return kv, q, att
+        # img: (batch_size, num_proposal, img_feature_size)
+        # img_feature_size = img.size(-1)
+        img_encoded = self.img_rnn(img)  # (batch_size, num_proposal, lstm_hidden_size)
+
+        kv = self.kv(img)
+        q = self.q(img)
+
+        att = self.att(img_encoded).squeeze(-1)
+        att = F.softmax(att, dim=-1).unsqueeze(-1)
+
+        return kv, q, att
 
 
 class GatedTrans(nn.Module):
