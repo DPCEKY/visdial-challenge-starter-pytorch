@@ -54,6 +54,7 @@ class QUES_KVQ(nn.Module):
         att = F.softmax(att, dim=-1).unsqueeze(-1)  # (batch_size, num_rounds, que_len_max, 1)
 
         weighted_kv = kv * att
+        weighted_kv = torch.sum(weighted_kv, dim=-2)
         print(weighted_kv.shape)
 
         return kv, q, att
