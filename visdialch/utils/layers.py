@@ -86,7 +86,7 @@ class IMG_KVQ(nn.Module):
         # img: (batch_size, num_proposal, img_feature_size)
         # img_feature_size = img.size(-1)
 
-        img_encoded = self.img_rnn(img)  # (batch_size, num_proposal, lstm_hidden_size)
+        img_encoded, _ = self.img_rnn(img)  # (batch_size, num_proposal, lstm_hidden_size)
         print(img_encoded.shape)
         raise Exception()
 
