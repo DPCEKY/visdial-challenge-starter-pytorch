@@ -12,9 +12,6 @@ class RvAEncoder(nn.Module):
         super().__init__()
         self.config = config
 
-        print('img_feature_size', config["img_feature_size"])
-        raise Exception()
-
         self.word_embed = nn.Embedding(
             len(vocabulary), 
             config["word_embedding_size"], 
@@ -108,8 +105,9 @@ class RvAEncoder(nn.Module):
         # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
         # print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
 
-        kv, q, att = IMG_KVQ(img)
-        print(kv.shape, q.shape, att.shape)
+        IMG_KVQ(img)
+        # kv, q, att = IMG_KVQ(img)
+        # print(kv.shape, q.shape, att.shape)
         raise Exception()
 
         # THE FOLLOWING BLOCK IS NOT USED.
