@@ -17,13 +17,36 @@ class QUES_KVQ(nn.Module):
         )
         self.ques_rnn = DynamicRNN(self.ques_rnn)
 
+        self.kv = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            GatedTrans(
+                config["word_embedding_size"],
+                config["lstm_hidden_size"]
+            ),
+        )
+
+        self.q = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            GatedTrans(
+                config["word_embedding_size"],
+                config["lstm_hidden_size"]
+            ),
+        )
+
+        self.att = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            nn.Linear(
+                config["lstm_hidden_size"] * 2,
+                1
+            )
+        )
+
     def forward(self, ques_word_embed, ques_lens, ques_not_pad):
         ques_word_embed = ques_word_embed.view([-1, ques_word_embed.size(-2), ques_word_embed.size(-1)])  # (batch_size * num_rounds, que_len_max, word_embed_size)
-        # ques_lens = ques_lens.view(-1)
-        print('ques_word_embed', ques_word_embed.shape)
-        print('ques_lens', ques_lens.shape)
         ques_word_encoded, _ = self.ques_rnn(ques_word_embed, ques_lens)  # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
-        return ques_word_encoded
+
+        att = self.att(ques_word_encoded)
+        return att
 
 
 
