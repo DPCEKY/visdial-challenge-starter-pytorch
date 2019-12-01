@@ -49,7 +49,9 @@ class QUES_KVQ(nn.Module):
 
         kv = self.kv(ques_word_embed)
         q = self.q(ques_word_embed)
-        print(ques_not_pad)
+        print(1 - ques_not_pad)
+        print(self.att(ques_word_encoded).squeeze(-1))
+
         att = self.att(ques_word_encoded).squeeze(-1) + float('-inf') * (1 - ques_not_pad)
         att = F.softmax(att, dim=-1).unsqueeze(-1)
 
