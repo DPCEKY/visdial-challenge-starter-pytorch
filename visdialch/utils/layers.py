@@ -55,7 +55,8 @@ class QUES_KVQ(nn.Module):
         att = self.att(ques_word_encoded).squeeze(-1) + -99999 * (1 - ques_not_pad)
         att = F.softmax(att, dim=-1).unsqueeze(-1)
 
-        # print(att)
+
+        print(att)
 
 
 
