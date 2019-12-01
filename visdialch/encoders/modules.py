@@ -115,11 +115,7 @@ class ATT_MODULE(nn.Module):
                                                   1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
 
         ques_embed = ques.view(-1, ques.size(-1))  # shape: (batch_size * num_rounds, word_embedding_size)
-        print('!!', ques_embed.shape)
-        raise Exception()
-
-
-        ques_embed = self.Q_embed(ques_embed)  # shape: (batch_size * num_rounds, lstm_hidden_size)  !!!! will remove this!!!!
+        # ques_embed = self.Q_embed(ques_embed)  # shape: (batch_size * num_rounds, lstm_hidden_size)  !!!! will remove this!!!!
         ques_embed = ques_embed.view(batch_size, num_rounds,
                                      ques_embed.size(-1))  # shape: (batch_size, num_rounds, lstm_hidden_size)
         ques_embed = ques_embed.unsqueeze(2).repeat(1, 1, num_proposals,
@@ -129,6 +125,9 @@ class ATT_MODULE(nn.Module):
                                 dim=-1)  # (batch_size, num_rounds, num_proposals, lstm_hidden_size)
         att_embed = self.att(att_embed).squeeze(-1)  # (batch_size, num_rounds, num_proposals)
         att = self.softmax(att_embed)  # shape: (batch_size, num_rounds, num_proposals)
+
+        print('fwe', att.shape)
+        raise Exception()
 
         return att
 
