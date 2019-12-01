@@ -5,6 +5,7 @@ from torch.nn import functional as F
 
 class QUES_KVQ(nn.Module):
     def __init__(self, config):
+        super(QUES_KVQ, self).__init__()
         self.ques_rnn = nn.LSTM(
             config["word_embedding_size"],
             config["lstm_hidden_size"],
