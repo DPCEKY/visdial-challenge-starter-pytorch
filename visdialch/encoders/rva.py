@@ -110,7 +110,7 @@ class RvAEncoder(nn.Module):
         # kv_img, q_img: (batch_size, num_proposals, lstm_hidden_size)
         # att_img: (batch_size, num_proposals, 1)
 
-        # kv_img = kv_img * att_img
+        kv_img = kv_img * att_img
 
         # THE FOLLOWING BLOCK IS NOT USED.
         # # question feature for RvA
