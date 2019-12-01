@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from visdialch.utils import DynamicRNN
-from visdialch.utils import Q_ATT, H_ATT, V_Filter
+from visdialch.utils import Q_ATT, H_ATT, V_Filter, QUES_KVQ
 from .modules import RvA_MODULE
 
 
@@ -57,6 +57,11 @@ class RvAEncoder(nn.Module):
                 config["lstm_hidden_size"]
             )
         )
+
+        # multimodal kernal
+        self.ques_kvq = QUES_KVQ(config)
+
+
         # other useful functions
         self.softmax = nn.Softmax(dim=-1)
 
@@ -87,12 +92,18 @@ class RvAEncoder(nn.Module):
         # cap_not_pad - shape: (batch_size, 1, quen_len_max)
         cap_word_embed, cap_word_encoded, cap_not_pad = self.init_cap_embed(batch)
 
-        # question feature for RvA
-        # ques_ref_feat - shape: (batch_size, num_rounds, word_embedding_size)
-        # ques_ref_att - shape: (batch_size, num_rounds, quen_len_max)
-        ques_ref_feat, ques_ref_att = self.Q_ATT_ref(ques_word_embed, ques_word_encoded, ques_not_pad)
-        # cap_ref_feat - shape: (batch_size, 1, word_embedding_size)
-        cap_ref_feat, _ = self.Q_ATT_ref(cap_word_embed, cap_word_encoded, cap_not_pad)
+        # start here
+        haha = self.ques_kvq(ques_word_embed, batch['ques_len'], ques_not_pad)
+        print(haha.shape)
+        raise Exception()
+
+
+        # # question feature for RvA
+        # # ques_ref_feat - shape: (batch_size, num_rounds, word_embedding_size)
+        # # ques_ref_att - shape: (batch_size, num_rounds, quen_len_max)
+        # ques_ref_feat, ques_ref_att = self.Q_ATT_ref(ques_word_embed, ques_word_encoded, ques_not_pad)
+        # # cap_ref_feat - shape: (batch_size, 1, word_embedding_size)
+        # cap_ref_feat, _ = self.Q_ATT_ref(cap_word_embed, cap_word_encoded, cap_not_pad)
 
         # RvA module
         ques_feat = (cap_ref_feat, ques_ref_feat, ques_encoded)
@@ -128,7 +139,7 @@ class RvAEncoder(nn.Module):
         # question feature
         ques_not_pad = (ques!=0).float() # shape: (batch_size, num_rounds, quen_len_max)
         ques = ques.view(-1, ques.size(-1)) # shape: (batch_size*num_rounds, quen_len_max)
-        ques_word_embed = self.word_embed(ques) # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size)
+        ques_word_embed = self.word_embed(ques) # shape: (batch_size*num_rounds, quen_len_max, word_embed_size)
         ques_word_encoded, _ = self.ques_rnn(ques_word_embed, batch['ques_len']) # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
         quen_len_max = ques_word_encoded.size(1)
         loc = batch['ques_len'].view(-1).cpu().numpy()-1

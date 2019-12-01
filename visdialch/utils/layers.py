@@ -3,6 +3,23 @@ from torch import nn
 from torch.nn import functional as F
 
 
+class QUES_KVQ(nn.Module):
+    def __init__(self, config):
+        self.ques_rnn = nn.LSTM(
+            config["word_embedding_size"],
+            config["lstm_hidden_size"],
+            config["lstm_num_layers"],
+            batch_first=True,
+            dropout=config["dropout"],
+            bidirectional=True
+        )
+
+    def forward(self, ques_word_embed, ques_lens, ques_not_pad):
+        ques_word_encoded, _ = self.ques_rnn(ques_word_embed, ques_lens)  # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
+        return ques_word_encoded
+
+
+
 class GatedTrans(nn.Module):
     """docstring for GatedTrans"""
     def __init__(self, in_dim, out_dim):
