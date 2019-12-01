@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from visdialch.utils import DynamicRNN
-from visdialch.utils import Q_ATT, H_ATT, V_Filter, QUES_KVQ
+from visdialch.utils import Q_ATT, H_ATT, V_Filter, QUES_KVQ, IMG_KVQ
 from .modules import RvA_MODULE
 
 
@@ -92,18 +92,25 @@ class RvAEncoder(nn.Module):
         # cap_not_pad - shape: (batch_size, 1, quen_len_max)
         cap_word_embed, cap_word_encoded, cap_not_pad = self.init_cap_embed(batch)
 
-        # start here
+        # MY CODE STARTS HERE
+        # Calculate kv, q for text
         kv_ques, q_ques, kv_ques_weighted, q_ques_weighted = self.ques_kvq(ques_word_embed,
                                                                            ques_not_pad, ques_word_encoded)
         # kv_ques, q_ques: (batch_size, num_rounds, que_len_max, lstm_hidden_size)
         # kv_ques_weighted, q_ques_weighted: (batch_size, num_rounds, lstm_hidden_size)
-        print(kv_ques.shape, q_ques.shape, kv_ques_weighted.shape, q_ques_weighted.shape)
+        # print(kv_ques.shape, q_ques.shape, kv_ques_weighted.shape, q_ques_weighted.shape)
         kv_cap, q_cap, kv_cap_weighted, q_cap_weighted = self.ques_kvq(cap_word_embed,
                                                                            cap_not_pad, cap_word_encoded)
         # kv_cap, q_cap: (batch_size, 1, que_len_max, lstm_hidden_size)
         # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
-        print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
+        # print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
 
+        # Calculate kv, q for image
+        kv, q, att = IMG_KVQ(img)
+        print(kv.shape, q.shape, att.shape)
+        raise Exception()
+
+        # THE FOLLOWING BLOCK IS NOT USED.
         # # question feature for RvA
         # # ques_ref_feat - shape: (batch_size, num_rounds, word_embedding_size)
         # # ques_ref_att - shape: (batch_size, num_rounds, quen_len_max)
@@ -133,7 +140,8 @@ class RvAEncoder(nn.Module):
         fused_embedding = torch.tanh(self.fusion(fused_vector))
 
         if return_att:
-            return fused_embedding, att_set + (ques_ref_att, ques_ans_att)
+            # return fused_embedding, att_set + (ques_ref_att, ques_ans_att)
+            pass
         else:
             return fused_embedding
 
