@@ -45,9 +45,10 @@ class QUES_KVQ(nn.Module):
         ques_word_embed = ques_word_embed.view([-1, ques_word_embed.size(-2), ques_word_embed.size(-1)])  # (batch_size * num_rounds, que_len_max, word_embed_size)
         ques_word_encoded, _ = self.ques_rnn(ques_word_embed, ques_lens)  # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
 
+        kv = self.kv(ques_word_embed)
+        q = self.q(ques_word_embed)
         att = self.att(ques_word_encoded)
-        return att
-
+        return kv, q, att
 
 
 class GatedTrans(nn.Module):
