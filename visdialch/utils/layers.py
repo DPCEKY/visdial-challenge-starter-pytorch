@@ -49,17 +49,12 @@ class QUES_KVQ(nn.Module):
 
         kv = self.kv(ques_word_embed)
         q = self.q(ques_word_embed)
-        print(-99999 * (1 - ques_not_pad))
-        print(self.att(ques_word_encoded).squeeze(-1))
 
-        att = self.att(ques_word_encoded).squeeze(-1) + -99999 * (1 - ques_not_pad)
-        att = F.softmax(att, dim=-1).unsqueeze(-1)
+        att = self.att(ques_word_encoded).squeeze(-1) + -99999 * (1 - ques_not_pad)  # (batch_size, num_rounds, que_len_max)
+        att = F.softmax(att, dim=-1).unsqueeze(-1)  # (batch_size, num_rounds, que_len_max, 1)
 
-
-        print(att)
-
-
-
+        weighted_kv = kv * att
+        print(weighted_kv.shape)
 
         return kv, q, att
 
