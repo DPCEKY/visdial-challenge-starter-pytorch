@@ -103,21 +103,11 @@ class ATT_MODULE(nn.Module):
         # output
         # att - shape: (batch_size, num_rounds, num_proposals)
 
-        batch_size = ques.size(0)
         num_rounds = ques.size(1)
         num_proposals = img.size(1)
 
-        # img_embed = img.view(-1, img.size(-1))  # shape: (batch_size * num_proposals, img_feature_size)
-        # img_embed = self.V_embed(img_embed)  # shape: (batch_size * num_proposals, lstm_hidden_size)
-        # img_embed = img_embed.view(batch_size, num_proposals,
-        #                            img_embed.size(-1))  # shape: (batch_size, num_proposals, lstm_hidden_size)
-
         img_embed = img.unsqueeze(1).repeat(1, num_rounds, 1,
                                                   1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
-        # ques_embed = ques.view(-1, ques.size(-1))  # shape: (batch_size * num_rounds, word_embedding_size)
-        # ques_embed = self.Q_embed(ques_embed)  # shape: (batch_size * num_rounds, lstm_hidden_size)
-        # ques_embed = ques_embed.view(batch_size, num_rounds,
-        #                              ques_embed.size(-1))  # shape: (batch_size, num_rounds, lstm_hidden_size)
 
         ques_embed = ques.unsqueeze(2).repeat(1, 1, num_proposals,
                                                     1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)

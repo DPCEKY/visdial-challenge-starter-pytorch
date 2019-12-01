@@ -8,6 +8,14 @@ class QUES_KVQ(nn.Module):
     def __init__(self, config):
         super(QUES_KVQ, self).__init__()
 
+        self.embed = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            GatedTrans(
+                config["lstm_hidden_size"] * 2,
+                config["lstm_hidden_size"]
+            ),
+        )
+
         self.kv = nn.Sequential(
             nn.Dropout(p=config["dropout_fc"]),
             GatedTrans(
@@ -27,7 +35,7 @@ class QUES_KVQ(nn.Module):
         self.att = nn.Sequential(
             nn.Dropout(p=config["dropout_fc"]),
             nn.Linear(
-                config["lstm_hidden_size"] * 2,
+                config["lstm_hidden_size"],
                 1
             )
         )
@@ -36,6 +44,7 @@ class QUES_KVQ(nn.Module):
         kv = self.kv(ques_word_embed)
         q = self.q(ques_word_embed)
 
+        ques_word_encoded = F.normalize(self.embed(ques_word_encoded), p=2, dim=-1)
         att = self.att(ques_word_encoded).squeeze(-1) + -99999 * (1 - ques_not_pad)  # (batch_size, num_rounds, que_len_max)
         att = F.softmax(att, dim=-1).unsqueeze(-1)  # (batch_size, num_rounds, que_len_max, 1)
 
@@ -48,6 +57,14 @@ class QUES_KVQ(nn.Module):
 class IMG_KVQ(nn.Module):
     def __init__(self, config):
         super(IMG_KVQ, self).__init__()
+
+        self.embed = nn.Sequential(
+            nn.Dropout(p=config["dropout_fc"]),
+            GatedTrans(
+                config["lstm_hidden_size"] * 2,
+                config["lstm_hidden_size"]
+            ),
+        )
 
         self.img_rnn = nn.LSTM(
             config["img_feature_size"],
@@ -77,7 +94,7 @@ class IMG_KVQ(nn.Module):
         self.att = nn.Sequential(
             nn.Dropout(p=config["dropout_fc"]),
             nn.Linear(
-                config["lstm_hidden_size"] * 2,
+                config["lstm_hidden_size"],
                 1
             )
         )
@@ -85,11 +102,11 @@ class IMG_KVQ(nn.Module):
     def forward(self, img):
         # img: (batch_size, num_proposal, img_feature_size)
         # img_feature_size = img.size(-1)
-
-        img_encoded, _ = self.img_rnn(img)  # (batch_size, num_proposal, 2 * lstm_hidden_size)
-
         kv = self.kv(img)
         q = self.q(img)
+
+        img_encoded, _ = self.img_rnn(img)  # (batch_size, num_proposal, 2 * lstm_hidden_size)
+        img_encoded = F.normalize(self.embed(img_encoded), p=2, dim=-1)
 
         att = self.att(img_encoded).squeeze(-1)
         att = F.softmax(att, dim=-1).unsqueeze(-1)
