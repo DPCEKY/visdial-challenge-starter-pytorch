@@ -51,7 +51,7 @@ class IMG_KVQ(nn.Module):
 
         print('?????')
 
-        print('img_feature_size', config["img_feature_size"])
+        # print('img_feature_size', config["img_feature_size"])
         raise Exception()
 
         # self.img_rnn = nn.LSTM(
