@@ -103,7 +103,6 @@ class RvAEncoder(nn.Module):
         # kv_cap, q_cap: (batch_size, 1, que_len_max, lstm_hidden_size)
         # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
         print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
-        raise Exception()
 
         # # question feature for RvA
         # # ques_ref_feat - shape: (batch_size, num_rounds, word_embedding_size)
