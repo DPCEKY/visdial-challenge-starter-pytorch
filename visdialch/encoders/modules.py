@@ -282,10 +282,10 @@ class RvA_MODULE(nn.Module):
         # ques_gs_prob shape: [batch_size, num_rounds, 2]
 
         cap_feat, ques_feat, ques_encoded = ques
-
-
-        print('??', cap_feat.shape)
-        raise Exception()
+        #
+        #
+        # print('??', cap_feat.shape)
+        # raise Exception()
 
         # cap_feat - shape: (batch_size, 1, lstm_hidden_size)
         # ques_feat - shape: (batch_size, num_rounds, lstm_hidden_size)
