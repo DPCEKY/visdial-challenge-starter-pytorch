@@ -127,9 +127,6 @@ class ATT_MODULE(nn.Module):
         att_embed = self.att(att_embed).squeeze(-1)  # (batch_size, num_rounds, num_proposals)
         att = self.softmax(att_embed)  # shape: (batch_size, num_rounds, num_proposals)
 
-        print('fwe', att.shape)
-        raise Exception()
-
         return att
 
 
