@@ -218,7 +218,7 @@ class INFER_MODULE(nn.Module):
         self.embed = nn.Sequential(
             nn.Dropout(p=config["dropout_fc"]),
             GatedTrans(
-                config["word_embedding_size"], 
+                config["lstm_hidden_size"],
                 config["lstm_hidden_size"]),
         )
         self.att = nn.Sequential(
