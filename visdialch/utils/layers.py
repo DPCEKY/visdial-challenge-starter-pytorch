@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from visdialch.utils import DynamicRNN
 
 
 class QUES_KVQ(nn.Module):
@@ -14,6 +15,7 @@ class QUES_KVQ(nn.Module):
             dropout=config["dropout"],
             bidirectional=True
         )
+        self.ques_rnn = DynamicRNN(self.ques_rnn)
 
     def forward(self, ques_word_embed, ques_lens, ques_not_pad):
         ques_word_embed = ques_word_embed.view([-1, ques_word_embed.size(-2), ques_word_embed.size(-1)])  # (batch_size * num_rounds, que_len_max, word_embed_size)
