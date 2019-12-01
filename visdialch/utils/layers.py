@@ -49,7 +49,7 @@ class IMG_KVQ(nn.Module):
     def __init__(self, config):
         super(IMG_KVQ, self).__init__()
 
-
+        print('?????')
 
         print('img_feature_size', config["img_feature_size"])
         raise Exception()
