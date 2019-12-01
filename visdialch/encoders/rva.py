@@ -12,6 +12,9 @@ class RvAEncoder(nn.Module):
         super().__init__()
         self.config = config
 
+        print('img_feature_size', config["img_feature_size"])
+        raise Exception()
+
         self.word_embed = nn.Embedding(
             len(vocabulary), 
             config["word_embedding_size"], 
