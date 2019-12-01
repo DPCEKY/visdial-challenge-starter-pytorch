@@ -4,8 +4,71 @@ from torch.nn import functional as F
 from visdialch.utils import GatedTrans
 
 
+# class ATT_MODULE(nn.Module):
+#     """docstring for ATT_MODULE"""
+#     def __init__(self, config):
+#         super(ATT_MODULE, self).__init__()
+#
+#         self.V_embed = nn.Sequential(
+#             nn.Dropout(p=config["dropout_fc"]),
+#             GatedTrans(
+#                 config["img_feature_size"],
+#                 config["lstm_hidden_size"]
+#             ),
+#         )
+#         self.Q_embed = nn.Sequential(
+#             nn.Dropout(p=config["dropout_fc"]),
+#             GatedTrans(
+#                 config["word_embedding_size"],
+#                 config["lstm_hidden_size"]
+#             ),
+#         )
+#         self.att = nn.Sequential(
+#             nn.Dropout(p=config["dropout_fc"]),
+#             nn.Linear(
+#                 config["lstm_hidden_size"],
+#                 1
+#             )
+#         )
+#
+#         self.softmax = nn.Softmax(dim=-1)
+#
+#         for m in self.modules():
+#             if isinstance(m, nn.Linear):
+#                 nn.init.kaiming_uniform_(m.weight.data)
+#                 if m.bias is not None:
+#                     nn.init.constant_(m.bias.data, 0)
+#
+#     def forward(self, img, ques):
+#         # input
+#         # img - shape: (batch_size, num_proposals, img_feature_size)
+#         # ques - shape: (batch_size, num_rounds, word_embedding_size)
+#         # output
+#         # att - shape: (batch_size, num_rounds, num_proposals)
+#
+#         batch_size = ques.size(0)
+#         num_rounds = ques.size(1)
+#         num_proposals = img.size(1)
+#
+#         img_embed = img.view(-1, img.size(-1)) # shape: (batch_size * num_proposals, img_feature_size)
+#         img_embed = self.V_embed(img_embed) # shape: (batch_size * num_proposals, lstm_hidden_size)
+#         img_embed = img_embed.view(batch_size, num_proposals, img_embed.size(-1)) # shape: (batch_size, num_proposals, lstm_hidden_size)
+#         img_embed = img_embed.unsqueeze(1).repeat(1, num_rounds, 1, 1) # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+#
+#         ques_embed = ques.view(-1, ques.size(-1)) # shape: (batch_size * num_rounds, word_embedding_size)
+#         ques_embed = self.Q_embed(ques_embed) # shape: (batch_size * num_rounds, lstm_hidden_size)
+#         ques_embed = ques_embed.view(batch_size, num_rounds, ques_embed.size(-1)) # shape: (batch_size, num_rounds, lstm_hidden_size)
+#         ques_embed = ques_embed.unsqueeze(2).repeat(1, 1, num_proposals, 1) # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+#
+#         att_embed = F.normalize(img_embed * ques_embed, p=2, dim=-1) # (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+#         att_embed = self.att(att_embed).squeeze(-1) # (batch_size, num_rounds, num_proposals)
+#         att = self.softmax(att_embed) # shape: (batch_size, num_rounds, num_proposals)
+#
+#         return att
+
 class ATT_MODULE(nn.Module):
     """docstring for ATT_MODULE"""
+
     def __init__(self, config):
         super(ATT_MODULE, self).__init__()
 
@@ -16,13 +79,7 @@ class ATT_MODULE(nn.Module):
                 config["lstm_hidden_size"]
             ),
         )
-        self.Q_embed = nn.Sequential(
-            nn.Dropout(p=config["dropout_fc"]),
-            GatedTrans(
-                config["word_embedding_size"], 
-                config["lstm_hidden_size"]
-            ),
-        )
+
         self.att = nn.Sequential(
             nn.Dropout(p=config["dropout_fc"]),
             nn.Linear(
@@ -38,7 +95,7 @@ class ATT_MODULE(nn.Module):
                 nn.init.kaiming_uniform_(m.weight.data)
                 if m.bias is not None:
                     nn.init.constant_(m.bias.data, 0)
-        
+
     def forward(self, img, ques):
         # input
         # img - shape: (batch_size, num_proposals, img_feature_size)
@@ -50,20 +107,29 @@ class ATT_MODULE(nn.Module):
         num_rounds = ques.size(1)
         num_proposals = img.size(1)
 
-        img_embed = img.view(-1, img.size(-1)) # shape: (batch_size * num_proposals, img_feature_size)
-        img_embed = self.V_embed(img_embed) # shape: (batch_size * num_proposals, lstm_hidden_size)
-        img_embed = img_embed.view(batch_size, num_proposals, img_embed.size(-1)) # shape: (batch_size, num_proposals, lstm_hidden_size)
-        img_embed = img_embed.unsqueeze(1).repeat(1, num_rounds, 1, 1) # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
-        
-        ques_embed = ques.view(-1, ques.size(-1)) # shape: (batch_size * num_rounds, word_embedding_size)
-        ques_embed = self.Q_embed(ques_embed) # shape: (batch_size * num_rounds, lstm_hidden_size)
-        ques_embed = ques_embed.view(batch_size, num_rounds, ques_embed.size(-1)) # shape: (batch_size, num_rounds, lstm_hidden_size)
-        ques_embed = ques_embed.unsqueeze(2).repeat(1, 1, num_proposals, 1) # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
-        
-        att_embed = F.normalize(img_embed * ques_embed, p=2, dim=-1) # (batch_size, num_rounds, num_proposals, lstm_hidden_size)
-        att_embed = self.att(att_embed).squeeze(-1) # (batch_size, num_rounds, num_proposals)
-        att = self.softmax(att_embed) # shape: (batch_size, num_rounds, num_proposals)
-        
+        img_embed = img.view(-1, img.size(-1))  # shape: (batch_size * num_proposals, img_feature_size)
+        img_embed = self.V_embed(img_embed)  # shape: (batch_size * num_proposals, lstm_hidden_size)
+        img_embed = img_embed.view(batch_size, num_proposals,
+                                   img_embed.size(-1))  # shape: (batch_size, num_proposals, lstm_hidden_size)
+        img_embed = img_embed.unsqueeze(1).repeat(1, num_rounds, 1,
+                                                  1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+
+        ques_embed = ques.view(-1, ques.size(-1))  # shape: (batch_size * num_rounds, word_embedding_size)
+        print('!!', ques_embed.shape)
+        raise Exception()
+
+
+        ques_embed = self.Q_embed(ques_embed)  # shape: (batch_size * num_rounds, lstm_hidden_size)  !!!! will remove this!!!!
+        ques_embed = ques_embed.view(batch_size, num_rounds,
+                                     ques_embed.size(-1))  # shape: (batch_size, num_rounds, lstm_hidden_size)
+        ques_embed = ques_embed.unsqueeze(2).repeat(1, 1, num_proposals,
+                                                    1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+
+        att_embed = F.normalize(img_embed * ques_embed, p=2,
+                                dim=-1)  # (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+        att_embed = self.att(att_embed).squeeze(-1)  # (batch_size, num_rounds, num_proposals)
+        att = self.softmax(att_embed)  # shape: (batch_size, num_rounds, num_proposals)
+
         return att
 
 
@@ -216,8 +282,8 @@ class RvA_MODULE(nn.Module):
         # ques_gs_prob shape: [batch_size, num_rounds, 2]
 
         cap_feat, ques_feat, ques_encoded = ques
-        # cap_feat - shape: (batch_size, 1, word_embedding_size)
-        # ques_feat - shape: (batch_size, num_rounds, word_embedding_size)
+        # cap_feat - shape: (batch_size, 1, lstm_hidden_size)
+        # ques_feat - shape: (batch_size, num_rounds, lstm_hidden_size)
         # ques_encoded - shape: (batch_size, num_rounds, lstm_hidden_size)
 
         batch_size = ques_feat.size(0)
@@ -228,6 +294,8 @@ class RvA_MODULE(nn.Module):
         hist_gs_set = self.PAIR_MODULE(hist, ques_encoded)  # (batch_size, num_rounds, num_rounds)
         img_att_ques = self.ATT_MODULE(img, ques_feat)  # (batch_size, num_rounds, num_proposals)
         img_att_cap = self.ATT_MODULE(img, cap_feat)  # (batch_size, 1, num_proposals)
+
+        # everything below this will stay the same
 
         # soft
         ques_prob_single = torch.Tensor(data=[1, 0]).view(1, -1).repeat(batch_size, 1) # shape: [batch_size, 2]
