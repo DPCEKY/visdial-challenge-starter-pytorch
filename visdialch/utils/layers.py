@@ -53,9 +53,10 @@ class QUES_KVQ(nn.Module):
         att = self.att(ques_word_encoded).squeeze(-1) + -99999 * (1 - ques_not_pad)  # (batch_size, num_rounds, que_len_max)
         att = F.softmax(att, dim=-1).unsqueeze(-1)  # (batch_size, num_rounds, que_len_max, 1)
 
-        weighted_kv = kv * att
-        weighted_kv = torch.sum(weighted_kv, dim=-2)
+        weighted_kv = torch.sum(kv * att, dim=-2)
+        weighted_q = torch.sum(q * att, dim=-2)
         print(weighted_kv.shape)
+        print(weighted_q.shape)
 
         return kv, q, att
 
