@@ -47,6 +47,8 @@ class QUES_KVQ(nn.Module):
         ques_word_encoded, _ = self.ques_rnn(ques_word_embed, ques_lens)  # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
         ques_word_encoded = ques_word_encoded.view([-1, num_rounds, ques_word_encoded.size(-2), ques_word_encoded.size(-1)])
 
+        print(ques_word_encoded.shape)
+
         kv = self.kv(ques_word_embed)
         q = self.q(ques_word_embed)
         att = self.att(ques_word_encoded) + float('-inf') * (1 - ques_not_pad)
