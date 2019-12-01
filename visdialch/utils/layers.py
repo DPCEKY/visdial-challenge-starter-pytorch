@@ -55,10 +55,8 @@ class QUES_KVQ(nn.Module):
 
         weighted_kv = torch.sum(kv * att, dim=-2)
         weighted_q = torch.sum(q * att, dim=-2)
-        print(weighted_kv.shape)
-        print(weighted_q.shape)
 
-        return kv, q, att
+        return kv, q, weighted_kv, weighted_q
 
 
 class GatedTrans(nn.Module):

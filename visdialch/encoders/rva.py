@@ -93,8 +93,8 @@ class RvAEncoder(nn.Module):
         cap_word_embed, cap_word_encoded, cap_not_pad = self.init_cap_embed(batch)
 
         # start here
-        kv_ques, q_ques, att_ques = self.ques_kvq(ques_word_embed, batch['ques_len'], ques_not_pad)
-        print(kv_ques.shape, q_ques.shape, att_ques.shape)
+        kv_ques, q_ques, kv_ques_weighted, q_ques_weighted = self.ques_kvq(ques_word_embed, batch['ques_len'], ques_not_pad)
+        print(kv_ques.shape, q_ques.shape, kv_ques_weighted.shape, q_ques_weighted.shape)
         raise Exception()
 
 
