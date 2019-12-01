@@ -93,16 +93,17 @@ class RvAEncoder(nn.Module):
         cap_word_embed, cap_word_encoded, cap_not_pad = self.init_cap_embed(batch)
 
         # start here
-        kv_ques, q_ques, kv_ques_weighted, q_ques_weighted = self.ques_kvq(ques_word_embed, batch['ques_len'],
-                                                                           ques_not_pad)
+        kv_ques, q_ques, kv_ques_weighted, q_ques_weighted = self.ques_kvq(ques_word_embed,
+                                                                           ques_not_pad, ques_word_encoded)
         # kv_ques, q_ques: (batch_size, num_rounds, que_len_max, lstm_hidden_size)
         # kv_ques_weighted, q_ques_weighted: (batch_size, num_rounds, lstm_hidden_size)
-        # print(kv_ques.shape, q_ques.shape, kv_ques_weighted.shape, q_ques_weighted.shape)
-        kv_cap, q_cap, kv_cap_weighted, q_cap_weighted = self.ques_kvq(cap_word_embed, batch['hist_len'][:, :1],
-                                                                           cap_not_pad)
+        print(kv_ques.shape, q_ques.shape, kv_ques_weighted.shape, q_ques_weighted.shape)
+        kv_cap, q_cap, kv_cap_weighted, q_cap_weighted = self.ques_kvq(cap_word_embed,
+                                                                           cap_not_pad, cap_word_encoded)
         # kv_cap, q_cap: (batch_size, 1, que_len_max, lstm_hidden_size)
         # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
-        # print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
+        print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
+        raise Exception()
 
         # # question feature for RvA
         # # ques_ref_feat - shape: (batch_size, num_rounds, word_embedding_size)

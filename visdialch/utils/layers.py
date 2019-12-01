@@ -4,18 +4,63 @@ from torch.nn import functional as F
 from visdialch.utils import DynamicRNN
 
 
+# class QUES_KVQ(nn.Module):
+#     def __init__(self, config):
+#         super(QUES_KVQ, self).__init__()
+#         self.ques_rnn = nn.LSTM(
+#             config["word_embedding_size"],
+#             config["lstm_hidden_size"],
+#             config["lstm_num_layers"],
+#             batch_first=True,
+#             dropout=config["dropout"],
+#             bidirectional=True
+#         )
+#         self.ques_rnn = DynamicRNN(self.ques_rnn)
+#
+#         self.kv = nn.Sequential(
+#             nn.Dropout(p=config["dropout_fc"]),
+#             GatedTrans(
+#                 config["word_embedding_size"],
+#                 config["lstm_hidden_size"]
+#             ),
+#         )
+#
+#         self.q = nn.Sequential(
+#             nn.Dropout(p=config["dropout_fc"]),
+#             GatedTrans(
+#                 config["word_embedding_size"],
+#                 config["lstm_hidden_size"]
+#             ),
+#         )
+#
+#         self.att = nn.Sequential(
+#             nn.Dropout(p=config["dropout_fc"]),
+#             nn.Linear(
+#                 config["lstm_hidden_size"] * 2,
+#                 1
+#             )
+#         )
+#
+#     def forward(self, ques_word_embed, ques_lens, ques_not_pad):
+#         num_rounds = ques_word_embed.size(1)
+#         ques_word_embed_view = ques_word_embed.view([-1, ques_word_embed.size(-2), ques_word_embed.size(-1)])  # (batch_size * num_rounds, que_len_max, word_embed_size)
+#         ques_word_encoded, _ = self.ques_rnn(ques_word_embed_view, ques_lens)  # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
+#         ques_word_encoded = ques_word_encoded.view([-1, num_rounds, ques_word_encoded.size(-2), ques_word_encoded.size(-1)])
+#
+#         kv = self.kv(ques_word_embed)
+#         q = self.q(ques_word_embed)
+#
+#         att = self.att(ques_word_encoded).squeeze(-1) + -99999 * (1 - ques_not_pad)  # (batch_size, num_rounds, que_len_max)
+#         att = F.softmax(att, dim=-1).unsqueeze(-1)  # (batch_size, num_rounds, que_len_max, 1)
+#
+#         weighted_kv = torch.sum(kv * att, dim=-2)
+#         weighted_q = torch.sum(q * att, dim=-2)
+#
+#         return kv, q, weighted_kv, weighted_q
+
 class QUES_KVQ(nn.Module):
     def __init__(self, config):
         super(QUES_KVQ, self).__init__()
-        self.ques_rnn = nn.LSTM(
-            config["word_embedding_size"],
-            config["lstm_hidden_size"],
-            config["lstm_num_layers"],
-            batch_first=True,
-            dropout=config["dropout"],
-            bidirectional=True
-        )
-        self.ques_rnn = DynamicRNN(self.ques_rnn)
 
         self.kv = nn.Sequential(
             nn.Dropout(p=config["dropout_fc"]),
@@ -41,11 +86,16 @@ class QUES_KVQ(nn.Module):
             )
         )
 
-    def forward(self, ques_word_embed, ques_lens, ques_not_pad):
-        num_rounds = ques_word_embed.size(1)
-        ques_word_embed_view = ques_word_embed.view([-1, ques_word_embed.size(-2), ques_word_embed.size(-1)])  # (batch_size * num_rounds, que_len_max, word_embed_size)
-        ques_word_encoded, _ = self.ques_rnn(ques_word_embed_view, ques_lens)  # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
-        ques_word_encoded = ques_word_encoded.view([-1, num_rounds, ques_word_encoded.size(-2), ques_word_encoded.size(-1)])
+    def forward(self, ques_word_embed, ques_not_pad, ques_word_encoded):
+        # num_rounds = ques_word_embed.size(1)
+        #
+        #
+        # ques_word_embed_view = ques_word_embed.view([-1, ques_word_embed.size(-2), ques_word_embed.size(-1)])  # (batch_size * num_rounds, que_len_max, word_embed_size)
+        # ques_word_encoded, _ = self.ques_rnn(ques_word_embed_view, ques_lens)  # shape: (batch_size*num_rounds, quen_len_max, lstm_hidden_size*2)
+        # ques_word_encoded = ques_word_encoded.view([-1, num_rounds, ques_word_encoded.size(-2), ques_word_encoded.size(-1)])
+
+
+
 
         kv = self.kv(ques_word_embed)
         q = self.q(ques_word_embed)
