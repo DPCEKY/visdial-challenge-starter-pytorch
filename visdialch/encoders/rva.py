@@ -106,7 +106,7 @@ class RvAEncoder(nn.Module):
         # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
         # print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
 
-        kv, q, att = IMG_KVQ(img)
+        kv, q, att = self.img_kvq(img)
         print(kv.shape, q.shape, att.shape)
         raise Exception()
 
