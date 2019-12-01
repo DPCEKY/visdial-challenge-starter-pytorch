@@ -85,9 +85,10 @@ class IMG_KVQ(nn.Module):
     def forward(self, img):
         # img: (batch_size, num_proposal, img_feature_size)
         # img_feature_size = img.size(-1)
-        print(img.shape)
-        raise Exception()
+
         img_encoded = self.img_rnn(img)  # (batch_size, num_proposal, lstm_hidden_size)
+        print(img_encoded.shape)
+        raise Exception()
 
         kv = self.kv(img)
         q = self.q(img)
