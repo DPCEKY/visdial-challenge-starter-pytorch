@@ -98,7 +98,7 @@ class ATT_MODULE(nn.Module):
 
     def forward(self, img, ques):
         # input
-        # img - shape: (batch_size, num_proposals, img_feature_size)
+        # img - shape: (batch_size, num_proposals, lstm_hidden_size)
         # ques - shape: (batch_size, num_rounds, word_embedding_size)
         # output
         # att - shape: (batch_size, num_rounds, num_proposals)
@@ -107,15 +107,18 @@ class ATT_MODULE(nn.Module):
         num_rounds = ques.size(1)
         num_proposals = img.size(1)
 
-        img_embed = img.view(-1, img.size(-1))  # shape: (batch_size * num_proposals, img_feature_size)
-        img_embed = self.V_embed(img_embed)  # shape: (batch_size * num_proposals, lstm_hidden_size)
-        img_embed = img_embed.view(batch_size, num_proposals,
-                                   img_embed.size(-1))  # shape: (batch_size, num_proposals, lstm_hidden_size)
-        img_embed = img_embed.unsqueeze(1).repeat(1, num_rounds, 1,
+        # img_embed = img.view(-1, img.size(-1))  # shape: (batch_size * num_proposals, img_feature_size)
+        # img_embed = self.V_embed(img_embed)  # shape: (batch_size * num_proposals, lstm_hidden_size)
+        # img_embed = img_embed.view(batch_size, num_proposals,
+        #                            img_embed.size(-1))  # shape: (batch_size, num_proposals, lstm_hidden_size)
+
+        img_embed = img.unsqueeze(1).repeat(1, num_rounds, 1,
                                                   1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+        print(img_embed.shape)
+        raise Exception()
 
         ques_embed = ques.view(-1, ques.size(-1))  # shape: (batch_size * num_rounds, word_embedding_size)
-        # ques_embed = self.Q_embed(ques_embed)  # shape: (batch_size * num_rounds, lstm_hidden_size)  !!!! will remove this!!!!
+        # ques_embed = self.Q_embed(ques_embed)  # shape: (batch_size * num_rounds, lstm_hidden_size)
         ques_embed = ques_embed.view(batch_size, num_rounds,
                                      ques_embed.size(-1))  # shape: (batch_size, num_rounds, lstm_hidden_size)
         ques_embed = ques_embed.unsqueeze(2).repeat(1, 1, num_proposals,
@@ -273,7 +276,7 @@ class RvA_MODULE(nn.Module):
         self.ATT_MODULE = ATT_MODULE(config)
         
     def forward(self, img, ques, hist):
-        # img shape: [batch_size, num_proposals, i_dim]
+        # img shape: [batch_size, num_proposals, lstm_hidden_size]
         # img_att_ques shape: [batch_size, num_rounds, num_proposals]
         # img_att_cap shape: [batch_size, 1, num_proposals]
         # ques_gs shape: [batch_size, num_rounds, 2]
@@ -281,10 +284,6 @@ class RvA_MODULE(nn.Module):
         # ques_gs_prob shape: [batch_size, num_rounds, 2]
 
         cap_feat, ques_feat, ques_encoded = ques
-        #
-        #
-        # print('??', cap_feat.shape)
-        # raise Exception()
 
         # cap_feat - shape: (batch_size, 1, lstm_hidden_size)
         # ques_feat - shape: (batch_size, num_rounds, lstm_hidden_size)

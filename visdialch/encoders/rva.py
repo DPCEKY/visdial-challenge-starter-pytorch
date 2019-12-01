@@ -106,9 +106,11 @@ class RvAEncoder(nn.Module):
         # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
         # print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
 
-        kv, q, att = self.img_kvq(img)
-        print(kv.shape, q.shape, att.shape)
-        raise Exception()
+        kv_img, q_img, att_img = self.img_kvq(img)
+        # kv_img, q_img: (batch_size, num_proposals, lstm_hidden_size)
+        # att_img: (batch_size, num_proposals, 1)
+
+        # kv_img = kv_img * att_img
 
         # THE FOLLOWING BLOCK IS NOT USED.
         # # question feature for RvA
@@ -121,7 +123,7 @@ class RvAEncoder(nn.Module):
         # RvA module
         ques_feat = (kv_cap_weighted, kv_ques_weighted, ques_encoded)
         # img_att - shape: (batch_size, num_rounds, num_proposals)
-        img_att, att_set = self.RvA_MODULE(img, ques_feat, hist_encoded)
+        img_att, att_set = self.RvA_MODULE(kv_img, ques_feat, hist_encoded)
         # img_feat - shape: (batch_size, num_rounds, img_feature_size)
         img_feat = torch.bmm(img_att, img)
         
