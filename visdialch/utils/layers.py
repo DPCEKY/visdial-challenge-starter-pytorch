@@ -48,6 +48,12 @@ class QUES_KVQ(nn.Module):
 class IMG_KVQ(nn.Module):
     def __init__(self, config):
         super(IMG_KVQ, self).__init__()
+
+
+
+        print('img_feature_size', config["img_feature_size"])
+        raise Exception()
+
         self.img_rnn = nn.LSTM(
             config["img_feature_size"],
             config["lstm_hidden_size"],
