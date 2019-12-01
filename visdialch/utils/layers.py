@@ -47,7 +47,9 @@ class QUES_KVQ(nn.Module):
 
         kv = self.kv(ques_word_embed)
         q = self.q(ques_word_embed)
-        att = self.att(ques_word_encoded)
+        att = self.att(ques_word_encoded) + float('-inf') * (1 - ques_not_pad)
+
+
         return kv, q, att
 
 
@@ -126,6 +128,7 @@ class Q_ATT(nn.Module):
         feat = torch.sum(att.unsqueeze(-1) * ques_word, dim=-2) # shape: (batch_size, num_rounds, word_embed_dim)
         
         return feat, att
+
 
 class H_ATT(nn.Module):
     """question-based history attention"""
