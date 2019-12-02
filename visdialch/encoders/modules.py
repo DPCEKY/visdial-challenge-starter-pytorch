@@ -54,6 +54,7 @@ class ATT_MODULE(nn.Module):
         # att_embed = self.att(att_embed).squeeze(-1)  # (batch_size, num_rounds, num_proposals)
 
 
+        # use a simple dot product to work with multi-modal kernel
         att_embed = torch.bmm(ques, img.permute(0, 2, 1))  # (batch_size, num_rounds, num_proposals)
         att = self.softmax(att_embed)  # shape: (batch_size, num_rounds, num_proposals)
 
