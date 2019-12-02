@@ -341,11 +341,11 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
 
                 # calculate scores and losses
                 batch_size = cap_embed_final.size(0)
-                logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))  # (batch_size, batch_size)
+                logits = img_embed_final.mm(cap_embed_final.transpose(0, 1)).cpu()  # (batch_size, batch_size)
                 preds_hori = torch.argmax(logits, dim=1)
                 preds_vert = torch.argmax(logits, dim=0)
                 gt = torch.arange(batch_size)
-                num_correct = (torch.sum(preds_hori == gt) + torch.sum(preds_vert == gt)).cpu()
+                num_correct = (orch.sum(preds_hori == gt) + torch.sum(preds_vert == gt)
                 acc = num_correct.double() / (batch_size * 2)
                 accs.append(acc.item())
 
