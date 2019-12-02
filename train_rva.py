@@ -269,9 +269,6 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
 
         optimizer.zero_grad()
         output, cap_embed_final, img_embed_final = model(batch)
-        print(output.shape, cap_embed_final.shape, img_embed_final.shape)
-        raise Exception()
-
 
         target = (
             batch["ans_ind"]
@@ -327,7 +324,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
             for key in batch:
                 batch[key] = batch[key].to(device)
             with torch.no_grad():
-                output = model(batch)
+                output, cap_embed_final, img_embed_final = model(batch)
             sparse_metrics.observe(output, batch["ans_ind"])
             if "gt_relevance" in batch:
                 output = output[
