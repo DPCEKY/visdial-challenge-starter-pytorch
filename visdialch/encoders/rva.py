@@ -72,7 +72,7 @@ class RvAEncoder(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias.data, 0)
 
-    def forward(self, batch, return_att=False, return_kernel_reps=False):
+    def forward(self, batch, return_att=False):
         # img - shape: (batch_size, num_proposals, img_feature_size) - RCNN bottom-up features
         img = batch["img_feat"]
         batch_size = batch["ques"].size(0)
@@ -144,12 +144,10 @@ class RvAEncoder(nn.Module):
         if return_att:
             # return fused_embedding, att_set + (ques_ref_att, ques_ans_att)
             pass
-        elif return_kernel_reps:
+        else:
             cap_reps = kv_cap_weighted.squeeze(1)  # (batch_size, lstm_hidden_size)
             img_reps = torch.sum(kv_img, dim=1)  # (batch_size, lstm_hidden_size)
             return fused_embedding, cap_reps, img_reps
-        else:
-            return fused_embedding
 
     def init_q_embed(self, batch):
         ques = batch["ques"] # shape: (batch_size, num_rounds, quen_len_max)

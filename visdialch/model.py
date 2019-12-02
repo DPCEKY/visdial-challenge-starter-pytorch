@@ -15,7 +15,7 @@ class EncoderDecoderModel(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
 
-    def forward(self, batch, return_kernel_reps=False):
-        encoder_output = self.encoder(batch, return_kernel_reps=return_kernel_reps)
+    def forward(self, batch):
+        encoder_output, cap_reps, img_reps = self.encoder(batch)
         decoder_output = self.decoder(encoder_output, batch)
-        return decoder_output
+        return decoder_output, cap_reps, img_reps

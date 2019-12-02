@@ -268,7 +268,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
             batch[key] = batch[key].to(device)
 
         optimizer.zero_grad()
-        output, cap_embed_final, img_embed_final = model(batch, return_kernel_reps=True)
+        output, cap_embed_final, img_embed_final = model(batch)
         print(output.shape, cap_embed_final.shape, img_embed_final.shape)
         raise Exception()
 
