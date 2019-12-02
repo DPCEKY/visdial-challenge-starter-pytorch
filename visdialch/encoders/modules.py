@@ -44,15 +44,21 @@ class ATT_MODULE(nn.Module):
         num_rounds = ques.size(1)
         num_proposals = img.size(1)
 
-        img_embed = img.unsqueeze(1).repeat(1, num_rounds, 1,
-                                                  1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+        # img_embed = img.unsqueeze(1).repeat(1, num_rounds, 1,
+        #                                           1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+        #
+        # ques_embed = ques.unsqueeze(2).repeat(1, 1, num_proposals,
+        #                                             1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+        #
+        # att_embed = F.normalize(img_embed * ques_embed, p=2,
+        #                         dim=-1)  # (batch_size, num_rounds, num_proposals, lstm_hidden_size)
+        # att_embed = self.att(att_embed).squeeze(-1)  # (batch_size, num_rounds, num_proposals)
 
-        ques_embed = ques.unsqueeze(2).repeat(1, 1, num_proposals,
-                                                    1)  # shape: (batch_size, num_rounds, num_proposals, lstm_hidden_size)
 
-        att_embed = F.normalize(img_embed * ques_embed, p=2,
-                                dim=-1)  # (batch_size, num_rounds, num_proposals, lstm_hidden_size)
-        att_embed = self.att(att_embed).squeeze(-1)  # (batch_size, num_rounds, num_proposals)
+        att_embed = torch.bmm(ques, img.permute(0, 2, 1))
+        print(att_embed.shape)
+        raise Exception()
+
         att = self.softmax(att_embed)  # shape: (batch_size, num_rounds, num_proposals)
 
         return att
