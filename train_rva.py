@@ -280,15 +280,15 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
             output.view(-1, output.size(-1)), target.view(-1)
         )
 
-        # calculate scores and losses for kernel
-        batch_size = cap_embed_final.size(0)
-        C = 0  # weight of kernel loss
-        logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))  # (batch_size, batch_size)
-        gt = logits.diagonal()
-        diffs_hori = logits - gt.unsqueeze(1).repeat([1, batch_size])
-        diffs_vert = logits - gt.unsqueeze(0).repeat([batch_size, 1])
-        diffs = torch.cat([diffs_hori, diffs_vert], dim=1)  # (batch_size, batch_size * 2)
-        batch_loss += C * torch.mean(F.relu(diffs + 1))
+        # # calculate scores and losses for kernel
+        # batch_size = cap_embed_final.size(0)
+        # C = 0  # weight of kernel loss
+        # logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))  # (batch_size, batch_size)
+        # gt = logits.diagonal()
+        # diffs_hori = logits - gt.unsqueeze(1).repeat([1, batch_size])
+        # diffs_vert = logits - gt.unsqueeze(0).repeat([batch_size, 1])
+        # diffs = torch.cat([diffs_hori, diffs_vert], dim=1)  # (batch_size, batch_size * 2)
+        # batch_loss += C * torch.mean(F.relu(diffs + 1))
 
         batch_loss.backward()
         optimizer.step()
