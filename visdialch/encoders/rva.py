@@ -221,17 +221,18 @@ class RvAEncoder(nn.Module):
             # kv_img_weighted = kv_img * att_img  # (batch_size, num_proposals, lstm_hidden_size)
             query_img = torch.sum(q_img * att_img, dim=-2)  # (batch_size, lstm_hidden_size)
 
-            cap_reps = self.attention_summarize(query_img, kv_cap, cap_not_pad, True)  # (batch_size, lstm_hidden_size)
-            img_reps = self.attention_summarize(query_cap, kv_img, None)  # (batch_size, lstm_hidden_size)
+            cap_reps = self.attention_summarize(query_img, kv_cap_weighted, cap_not_pad, True)  # (batch_size, lstm_hidden_size)
+            img_reps = self.attention_summarize(query_cap, kv_img_weighted, None)  # (batch_size, lstm_hidden_size)
             return fused_embedding, cap_reps, img_reps
 
     def attention_summarize(self, query, kv, kv_no_pad, use_no_pad=False):
         # query: (batch_size, lstm_hidden_size)
         # kv: (batch_size, num_ele, lstm_hidden_size)
         # kv_no_pad: (batch_size, num_ele)
-        print(use_no_pad)
-        print(kv.shape)
-        print(query.shape)
+
+        # print(use_no_pad)
+        # print(kv.shape)
+        # print(query.shape)
 
 
         scores = torch.bmm(kv, query.unsqueeze(-1)).squeeze(-1) # (batch_size, num_ele)
