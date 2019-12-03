@@ -229,6 +229,11 @@ class RvAEncoder(nn.Module):
         # query: (batch_size, lstm_hidden_size)
         # kv: (batch_size, num_ele, lstm_hidden_size)
         # kv_no_pad: (batch_size, num_ele)
+        print(use_no_pad)
+        print(kv.shape)
+        print(query.shape)
+
+
         scores = torch.bmm(kv, query.unsqueeze(-1)).squeeze(-1) # (batch_size, num_ele)
         if use_no_pad:
             scores += -99999 * (1 - kv_no_pad)
