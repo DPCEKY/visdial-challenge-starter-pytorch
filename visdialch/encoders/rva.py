@@ -72,6 +72,83 @@ class RvAEncoder(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias.data, 0)
 
+    # def forward(self, batch, return_att=False):
+    #     # img - shape: (batch_size, num_proposals, img_feature_size) - RCNN bottom-up features
+    #     img = batch["img_feat"]
+    #     batch_size = batch["ques"].size(0)
+    #     num_rounds = batch["ques"].size(1)
+    #
+    #     # init language embedding
+    #     # ques_word_embed - shape: (batch_size, num_rounds, quen_len_max, word_embedding_size)
+    #     # ques_word_encoded - shape: (batch_size, num_rounds, quen_len_max, lstm_hidden_size)
+    #     # ques_not_pad - shape: (batch_size, num_rounds, quen_len_max)
+    #     # ques_encoded - shape: (batch_size, num_rounds, lstm_hidden_size)
+    #     ques_word_embed, ques_word_encoded, ques_not_pad, ques_encoded = self.init_q_embed(batch)
+    #     # hist_word_embed - shape: (batch_size, num_rounds, hist_len_max, word_embedding_size)
+    #     # hist_encoded - shape: (batch_size, num_rounds, lstm_hidden_size)
+    #     hist_word_embed, hist_encoded = self.init_h_embed(batch)
+    #     # cap_word_embed - shape: (batch_size, 1, quen_len_max, word_embedding_size)
+    #     # cap_word_encoded - shape: (batch_size, 1, quen_len_max, lstm_hidden_size)
+    #     # cap_not_pad - shape: (batch_size, 1, quen_len_max)
+    #     cap_word_embed, cap_word_encoded, cap_not_pad = self.init_cap_embed(batch)
+    #
+    #     # MY CODE STARTS HERE
+    #     # Calculate kv, q for text
+    #     kv_ques, q_ques, kv_ques_weighted, q_ques_weighted = self.ques_kvq(ques_word_embed,
+    #                                                                        ques_not_pad, ques_word_encoded)
+    #     # kv_ques, q_ques: (batch_size, num_rounds, que_len_max, lstm_hidden_size)
+    #     # kv_ques_weighted, q_ques_weighted: (batch_size, num_rounds, lstm_hidden_size)
+    #     # print(kv_ques.shape, q_ques.shape, kv_ques_weighted.shape, q_ques_weighted.shape)
+    #     kv_cap, q_cap, kv_cap_weighted, q_cap_weighted = self.ques_kvq(cap_word_embed,
+    #                                                                        cap_not_pad, cap_word_encoded)
+    #     # kv_cap, q_cap: (batch_size, 1, que_len_max, lstm_hidden_size)
+    #     # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
+    #     # print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
+    #
+    #     kv_img, q_img, att_img = self.img_kvq(img)
+    #     # kv_img, q_img: (batch_size, num_proposals, lstm_hidden_size)
+    #     # att_img: (batch_size, num_proposals, 1)
+    #
+    #     # weight kv_img before attention (this helped)
+    #     kv_img = kv_img * att_img
+    #
+    #     # THE FOLLOWING BLOCK IS NOT USED.
+    #     # # question feature for RvA
+    #     # # ques_ref_feat - shape: (batch_size, num_rounds, word_embedding_size)
+    #     # # ques_ref_att - shape: (batch_size, num_rounds, quen_len_max)
+    #     # ques_ref_feat, ques_ref_att = self.Q_ATT_ref(ques_word_embed, ques_word_encoded, ques_not_pad)
+    #     # # cap_ref_feat - shape: (batch_size, 1, word_embedding_size)
+    #     # cap_ref_feat, _ = self.Q_ATT_ref(cap_word_embed, cap_word_encoded, cap_not_pad)
+    #
+    #     # RvA module
+    #     ques_feat = (kv_cap_weighted, kv_ques_weighted, ques_encoded)
+    #     # img_att - shape: (batch_size, num_rounds, num_proposals)
+    #     img_att, att_set = self.RvA_MODULE(kv_img, ques_feat, hist_encoded)
+    #     # img_feat - shape: (batch_size, num_rounds, img_feature_size)
+    #     img_feat = torch.bmm(img_att, img)
+    #
+    #     # ans_feat for joint embedding
+    #     # hist_ans_feat - shape: (batch_size, num_rounds, lstm_hidden_size*2)
+    #     hist_ans_feat = self.H_ATT_ans(hist_encoded, ques_encoded)
+    #     # ques_ans_feat - shape: (batch_size, num_rounds, lstm_hidden_size)
+    #     # ques_ans_att - shape: (batch_size, num_rounds, quen_len_max)
+    #     ques_ans_feat, ques_ans_att = self.Q_ATT_ans(ques_word_embed, ques_word_encoded, ques_not_pad)
+    #     # img_ans_feat - shape: (batch_size, num_rounds, img_feature_size)
+    #     img_ans_feat = self.V_Filter(img_feat, ques_ans_feat)
+    #
+    #     # joint embedding
+    #     fused_vector = torch.cat((img_ans_feat, ques_ans_feat, hist_ans_feat), -1)
+    #     # img_ans_feat - shape: (batch_size, num_rounds, lstm_hidden_size)
+    #     fused_embedding = torch.tanh(self.fusion(fused_vector))
+    #
+    #     if return_att:
+    #         # return fused_embedding, att_set + (ques_ref_att, ques_ans_att)
+    #         pass
+    #     else:
+    #         cap_reps = kv_cap_weighted.squeeze(1)  # (batch_size, lstm_hidden_size)
+    #         img_reps = torch.sum(kv_img, dim=1)  # (batch_size, lstm_hidden_size)
+    #         return fused_embedding, cap_reps, img_reps
+
     def forward(self, batch, return_att=False):
         # img - shape: (batch_size, num_proposals, img_feature_size) - RCNN bottom-up features
         img = batch["img_feat"]
@@ -94,13 +171,15 @@ class RvAEncoder(nn.Module):
 
         # MY CODE STARTS HERE
         # Calculate kv, q for text
-        kv_ques, q_ques, kv_ques_weighted, q_ques_weighted = self.ques_kvq(ques_word_embed,
-                                                                           ques_not_pad, ques_word_encoded)
+        kv_ques, q_ques, att_ques = self.ques_kvq(ques_word_embed, ques_not_pad, ques_word_encoded)
+        kv_ques_weighted_avg = torch.sum(kv_ques * att_ques, dim=-2) ???
+
+
         # kv_ques, q_ques: (batch_size, num_rounds, que_len_max, lstm_hidden_size)
         # kv_ques_weighted, q_ques_weighted: (batch_size, num_rounds, lstm_hidden_size)
         # print(kv_ques.shape, q_ques.shape, kv_ques_weighted.shape, q_ques_weighted.shape)
         kv_cap, q_cap, kv_cap_weighted, q_cap_weighted = self.ques_kvq(cap_word_embed,
-                                                                           cap_not_pad, cap_word_encoded)
+                                                                       cap_not_pad, cap_word_encoded)
         # kv_cap, q_cap: (batch_size, 1, que_len_max, lstm_hidden_size)
         # kv_cap_weighted, q_cap_weighted: (batch_size, 1, lstm_hidden_size)
         # print(kv_cap.shape, q_cap.shape, kv_cap_weighted.shape, q_cap_weighted.shape)
@@ -112,13 +191,7 @@ class RvAEncoder(nn.Module):
         # weight kv_img before attention (this helped)
         kv_img = kv_img * att_img
 
-        # THE FOLLOWING BLOCK IS NOT USED.
-        # # question feature for RvA
-        # # ques_ref_feat - shape: (batch_size, num_rounds, word_embedding_size)
-        # # ques_ref_att - shape: (batch_size, num_rounds, quen_len_max)
-        # ques_ref_feat, ques_ref_att = self.Q_ATT_ref(ques_word_embed, ques_word_encoded, ques_not_pad)
-        # # cap_ref_feat - shape: (batch_size, 1, word_embedding_size)
-        # cap_ref_feat, _ = self.Q_ATT_ref(cap_word_embed, cap_word_encoded, cap_not_pad)
+
 
         # RvA module
         ques_feat = (kv_cap_weighted, kv_ques_weighted, ques_encoded)
@@ -126,7 +199,7 @@ class RvAEncoder(nn.Module):
         img_att, att_set = self.RvA_MODULE(kv_img, ques_feat, hist_encoded)
         # img_feat - shape: (batch_size, num_rounds, img_feature_size)
         img_feat = torch.bmm(img_att, img)
-        
+
         # ans_feat for joint embedding
         # hist_ans_feat - shape: (batch_size, num_rounds, lstm_hidden_size*2)
         hist_ans_feat = self.H_ATT_ans(hist_encoded, ques_encoded)
