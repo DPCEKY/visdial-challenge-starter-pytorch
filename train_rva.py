@@ -282,7 +282,7 @@ for epoch in range(start_epoch, config["solver"]["num_epochs"]):
 
         # calculate scores and losses for kernel
         batch_size = cap_embed_final.size(0)
-        C = 1  # weight of kernel loss
+        C = 0.1  # weight of kernel loss
         logits = img_embed_final.mm(cap_embed_final.transpose(0, 1))  # (batch_size, batch_size)
         gt = logits.diagonal()
         diffs_hori = logits - gt.unsqueeze(1).repeat([1, batch_size])
